@@ -8,13 +8,14 @@ use std::{ops::Range, time::Duration};
 
 use gpui::prelude::*;
 use gpui::{
-    actions, anchored, deferred, div, fill, point, px, relative, size, AnchoredPositionMode, App,
-    AsyncApp, Bounds, ClipboardItem, Context, CursorStyle, Element, ElementId, ElementInputHandler,
-    Entity, EntityInputHandler, FocusHandle, Focusable, GlobalElementId, Hsla, InspectorElementId,
-    IntoElement, KeyBinding, KeyDownEvent, LayoutId, MouseButton, MouseDownEvent, MouseMoveEvent,
-    MouseUpEvent, PaintQuad, ParentElement, PathBuilder, Pixels, Point, Render, ScrollHandle,
-    ShapedLine, SharedString, StatefulInteractiveElement, Style, TextRun, Timer, UTF16Selection,
-    UnderlineStyle, WeakEntity, Window,
+    actions, anchored, deferred, div, fill, point, px, relative, size, uniform_list,
+    AnchoredPositionMode, App, AsyncApp, Bounds, ClipboardItem, Context, CursorStyle, Element,
+    ElementId, ElementInputHandler, Entity, EntityInputHandler, FocusHandle, Focusable,
+    GlobalElementId, Hsla, InspectorElementId, IntoElement, KeyBinding, KeyDownEvent, LayoutId,
+    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, PaintQuad, ParentElement,
+    PathBuilder, Pixels, Point, Render, ScrollStrategy, ShapedLine, SharedString,
+    StatefulInteractiveElement, Style, TextRun, Timer, UTF16Selection, UnderlineStyle,
+    UniformListScrollHandle, WeakEntity, Window,
 };
 
 mod props;
@@ -107,7 +108,7 @@ pub struct Select {
     on_change: Option<props::SelectChangeHandler>,
     on_open_change: Option<props::SelectOpenChangeHandler>,
     on_search_change: Option<props::SelectSearchChangeHandler>,
-    scroll_handle: ScrollHandle,
+    scroll_handle: UniformListScrollHandle,
     /// 最近一次搜索文本排版结果。
     ///
     /// 鼠标定位、拖拽选区、IME 候选框定位都需要从屏幕坐标换算到文本字节偏移，
@@ -179,7 +180,7 @@ impl Select {
             on_change: props.on_change,
             on_open_change: props.on_open_change,
             on_search_change: props.on_search_change,
-            scroll_handle: ScrollHandle::new(),
+            scroll_handle: UniformListScrollHandle::new(),
             last_search_layout: None,
             last_search_bounds: None,
             last_search_scroll_x: px(0.0),
@@ -327,13 +328,12 @@ impl Select {
         self.state.selected_label(&self.options)
     }
 
-    /// 返回当前高亮项在过滤结果中的可视序号。
-    fn highlighted_visible_index(&self) -> Option<usize> {
+    /// 返回当前高亮项在指定过滤结果中的可视序号。
+    ///
+    /// 过滤结果由调用方在当前渲染帧统一计算后传入，避免滚动定位和虚拟列表渲染分别重复扫描大选项集。
+    fn highlighted_visible_index(&self, filtered: &[usize]) -> Option<usize> {
         let highlighted = self.state.highlighted_index()?;
-        self.state
-            .filtered_indices(&self.options)
-            .iter()
-            .position(|index| *index == highlighted)
+        filtered.iter().position(|index| *index == highlighted)
     }
 
     /// 同步触发器边界。
@@ -348,7 +348,7 @@ impl Select {
             return;
         }
 
-        self.trigger_bounds = Some(trigger_bounds.clone());
+        self.trigger_bounds = Some(*trigger_bounds);
         cx.notify();
     }
 
@@ -1221,22 +1221,59 @@ impl Select {
         popup_width: Pixels,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let mut list = div()
-            .id("xgpui-select-list")
-            .flex()
-            .flex_col()
-            .w_full()
-            .max_h(self.max_popup_height)
-            .overflow_y_scroll()
-            .track_scroll(&self.scroll_handle);
-
-        if filtered.is_empty() {
-            list = list.child(empty_option(resolved, self.empty_text.clone()));
+        let list_height = popup_list_height(filtered.len(), resolved, self.max_popup_height);
+        let list = if filtered.is_empty() {
+            div()
+                .id("xgpui-select-empty-list")
+                .flex()
+                .flex_col()
+                .w_full()
+                .h(list_height)
+                .child(empty_option(resolved, self.empty_text.clone()))
+                .into_any_element()
         } else {
-            for index in filtered {
-                list = list.child(self.render_option(index, resolved, cx));
-            }
-        }
+            // 下拉选项高度由 `ResolvedSelectStyle::option_height` 固定，符合 gpui uniform_list 的约束。
+            // 使用虚拟列表后，大选项集只会构建当前可见范围内的元素，避免搜索光标闪烁、hover
+            // 或高亮变化时反复创建所有匹配项。
+            let select = cx.entity();
+            let item_count = filtered.len();
+            let scroll_handle = self.scroll_handle.clone();
+            uniform_list(
+                "xgpui-select-list",
+                item_count,
+                move |visible_range, window, cx| {
+                    let select_state = select.read(cx);
+                    let selected_value = select_state.state.value_cloned();
+                    let highlighted = select_state.state.highlighted_index();
+
+                    visible_range
+                        .filter_map(|visible_index| {
+                            let option_index = *filtered.get(visible_index)?;
+                            let option = select_state.options.get(option_index)?.clone();
+                            let selected = selected_value
+                                .as_ref()
+                                .map(|value| value == &option.value)
+                                .unwrap_or(false);
+                            let option_highlighted = highlighted == Some(option_index);
+
+                            Some(select_option_element(
+                                select.clone(),
+                                option_index,
+                                option,
+                                selected,
+                                option_highlighted,
+                                resolved,
+                                window,
+                            ))
+                        })
+                        .collect()
+                },
+            )
+            .w_full()
+            .h(list_height)
+            .track_scroll(scroll_handle)
+            .into_any_element()
+        };
 
         div()
             .id("xgpui-select-popup")
@@ -1253,72 +1290,94 @@ impl Select {
             .on_mouse_down_out(cx.listener(Self::on_popup_mouse_down_out))
             .child(list)
     }
+}
 
-    /// 渲染单个选项。
-    fn render_option(
-        &self,
-        index: usize,
-        resolved: ResolvedSelectStyle,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        let option = self.options[index].clone();
-        let selected = self
-            .state
-            .value()
-            .map(|value| value == &option.value)
-            .unwrap_or(false);
-        let highlighted = self.state.highlighted_index() == Some(index);
-        let disabled = option.disabled;
-        let background = if highlighted {
-            resolved.option_highlighted
-        } else if selected {
-            resolved.option_selected
-        } else {
-            resolved.popup_background
-        };
-        let text_color = if disabled {
-            resolved.option_disabled_text
-        } else if selected {
-            resolved.option_selected_text
-        } else {
-            resolved.text
-        };
+/// 构造虚拟列表中的单个选项元素。
+///
+/// 该函数只接收渲染当前可视项所需的快照数据，避免虚拟列表闭包在持有 `Select` 只读借用时再进入
+/// 事件监听注册。事件仍通过 `window.listener_for` 回到原始实体，因此不会改变外部回调语义。
+fn select_option_element(
+    select: Entity<Select>,
+    index: usize,
+    option: SelectOption,
+    selected: bool,
+    highlighted: bool,
+    resolved: ResolvedSelectStyle,
+    window: &mut Window,
+) -> impl IntoElement {
+    let disabled = option.disabled;
+    let background = if highlighted {
+        resolved.option_highlighted
+    } else if selected {
+        resolved.option_selected
+    } else {
+        resolved.popup_background
+    };
+    let text_color = if disabled {
+        resolved.option_disabled_text
+    } else if selected {
+        resolved.option_selected_text
+    } else {
+        resolved.text
+    };
 
-        div()
-            .id(("xgpui-select-option", index))
-            .flex()
-            .items_center()
-            .w_full()
-            .h(resolved.option_height)
-            .px(resolved.padding_x)
-            .gap(resolved.gap)
-            .bg(background)
-            .text_color(text_color)
-            .text_size(resolved.font_size)
-            .line_height(resolved.line_height)
-            .opacity(if disabled { 0.58 } else { 1.0 })
-            .when_else(
-                disabled,
-                |this| this.cursor(CursorStyle::Arrow),
-                |this| {
-                    this.cursor(CursorStyle::PointingHand)
-                        .hover(move |style| style.bg(resolved.option_hover))
-                        .on_mouse_move(cx.listener(move |this, event, window, cx| {
+    div()
+        .id(("xgpui-select-option", index))
+        .flex()
+        .items_center()
+        .w_full()
+        .h(resolved.option_height)
+        .px(resolved.padding_x)
+        .gap(resolved.gap)
+        .bg(background)
+        .text_color(text_color)
+        .text_size(resolved.font_size)
+        .line_height(resolved.line_height)
+        .opacity(if disabled { 0.58 } else { 1.0 })
+        .when_else(
+            disabled,
+            |this| this.cursor(CursorStyle::Arrow),
+            |this| {
+                this.cursor(CursorStyle::PointingHand)
+                    .hover(move |style| style.bg(resolved.option_hover))
+                    .on_mouse_move(
+                        window.listener_for(&select, move |this, event, window, cx| {
                             this.on_option_mouse_move(index, event, window, cx)
-                        }))
-                        .on_click(cx.listener(move |this, event, window, cx| {
+                        }),
+                    )
+                    .on_click(
+                        window.listener_for(&select, move |this, event, window, cx| {
                             this.on_option_click(index, event, window, cx)
-                        }))
-                },
-            )
-            .child(
-                div()
-                    .flex_1()
-                    .min_w(px(0.0))
-                    .overflow_hidden()
-                    .child(option.label),
-            )
-            .when(selected, |this| this.child(check_icon(resolved)))
+                        }),
+                    )
+            },
+        )
+        .child(
+            div()
+                .flex_1()
+                .min_w(px(0.0))
+                .overflow_hidden()
+                .child(option.label),
+        )
+        .when(selected, |this| this.child(check_icon(resolved)))
+}
+
+/// 根据选项数量计算虚拟列表视口高度。
+///
+/// `uniform_list` 默认依赖父级给出明确高度；只设置 `max_h` 时，在弹层首次布局中可能无法推导出
+/// 可视区域高度，导致下拉框只剩很薄的一条。这里使用选项固定高度计算真实视口高度，既保留小列表
+/// 按内容收缩的行为，也确保大列表达到最大高度后由虚拟列表内部滚动。
+fn popup_list_height(
+    item_count: usize,
+    resolved: ResolvedSelectStyle,
+    max_height: Pixels,
+) -> Pixels {
+    let visible_count = item_count.max(1);
+    let desired_height = resolved.option_height * visible_count;
+    if desired_height > max_height {
+        max_height
+    } else {
+        desired_height
     }
 }
 
@@ -1332,8 +1391,14 @@ impl Render for Select {
         let show_clear = self.show_clear_button(focused);
         let selected_label = self.selected_label();
         let helper_text = self.helper_text.clone();
-        let filtered = self.state.filtered_indices(&self.options);
-        let trigger_bounds = self.trigger_bounds.clone();
+        // 过滤结果只在下拉打开时用于面板渲染和滚动定位；关闭状态跳过过滤，避免大型选项集在普通
+        // 父视图刷新、主题切换或焦点变化时仍然做无意义的全量扫描。
+        let filtered = if self.state.is_open() {
+            self.state.filtered_indices(&self.options)
+        } else {
+            Vec::new()
+        };
+        let trigger_bounds = self.trigger_bounds;
         let popup_width = trigger_bounds
             .as_ref()
             .map(|bounds| bounds.size.width)
@@ -1341,8 +1406,9 @@ impl Render for Select {
         let select_entity = cx.entity().downgrade();
 
         if self.state.is_open() {
-            if let Some(visible_index) = self.highlighted_visible_index() {
-                self.scroll_handle.scroll_to_item(visible_index);
+            if let Some(visible_index) = self.highlighted_visible_index(&filtered) {
+                self.scroll_handle
+                    .scroll_to_item(visible_index, ScrollStrategy::Center);
             }
         }
 
@@ -1517,7 +1583,7 @@ impl EntityInputHandler for Select {
         _window: &mut Window,
         _cx: &mut Context<Self>,
     ) -> Option<usize> {
-        let bounds = self.last_search_bounds.clone()?;
+        let bounds = self.last_search_bounds?;
         let line = self.last_search_layout.as_ref()?;
         let _local_point = bounds.localize(&point)?;
         let utf8_index = line.index_for_x(point.x - bounds.left() + self.last_search_scroll_x)?;
@@ -1687,7 +1753,7 @@ impl Element for SelectSearchElement {
         if search_enabled {
             window.handle_input(
                 &focus_handle,
-                ElementInputHandler::new(bounds.clone(), self.select.clone()),
+                ElementInputHandler::new(bounds, self.select.clone()),
                 cx,
             );
         }

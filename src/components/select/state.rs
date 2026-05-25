@@ -258,7 +258,7 @@ impl SelectState {
 
     /// 把搜索光标移动到指定 UTF-8 字节偏移。
     pub fn move_search_cursor(&mut self, offset: usize) -> SelectStateOutcome {
-        let offset = self.clamp_search_offset_to_boundary(offset);
+        let offset = self.clamp_search_offset_to_grapheme_boundary(offset);
         let old_range = self.search_selected_range.clone();
         let old_reversed = self.search_selection_reversed;
         let old_marked = self.search_marked_range.clone();
@@ -277,7 +277,7 @@ impl SelectState {
 
     /// 把搜索输入框选区扩展到指定 UTF-8 字节偏移。
     pub fn select_search_to(&mut self, offset: usize) -> SelectStateOutcome {
-        let offset = self.clamp_search_offset_to_boundary(offset);
+        let offset = self.clamp_search_offset_to_grapheme_boundary(offset);
         let old_range = self.search_selected_range.clone();
         let old_reversed = self.search_selection_reversed;
         let old_marked = self.search_marked_range.clone();
@@ -519,7 +519,9 @@ impl SelectState {
         let before_reversed = self.search_selection_reversed;
         let before_marked = self.search_marked_range.clone();
 
-        let replacement_range = self.search_replacement_range(range_utf16);
+        let Some(replacement_range) = self.search_replacement_range(range_utf16) else {
+            return SelectStateOutcome::default();
+        };
         let normalized_text = normalize_search_text(new_text);
         let next_search = format!(
             "{}{}{}",
@@ -540,10 +542,14 @@ impl SelectState {
         self.search_selected_range = new_selected_range_utf16
             .as_ref()
             .map(|range_utf16| {
-                let relative = range_from_utf16_in(&normalized_text, range_utf16);
-                let start = relative.start.min(inserted_len);
-                let end = relative.end.min(inserted_len);
-                replacement_range.start + start..replacement_range.start + end
+                // 平台输入法的新选区相对本次插入文本，而不是完整搜索词。
+                // 搜索框同样要防御复合 emoji、组合音标等字素内部偏移，避免 marked text
+                // 更新后重新保存一个会拆开用户可感知字符的光标范围。
+                let relative = normalize_inserted_search_selection_range(
+                    normalized_text.as_str(),
+                    range_utf16,
+                );
+                replacement_range.start + relative.start..replacement_range.start + relative.end
             })
             .unwrap_or_else(|| {
                 let cursor = replacement_range.start + inserted_len;
@@ -564,28 +570,21 @@ impl SelectState {
     }
 
     /// 返回本次搜索输入应替换的 UTF-8 字节区间。
-    fn search_replacement_range(&self, range_utf16: Option<Range<usize>>) -> Range<usize> {
-        range_utf16
+    fn search_replacement_range(&self, range_utf16: Option<Range<usize>>) -> Option<Range<usize>> {
+        let raw_range = range_utf16
             .as_ref()
             .map(|range| self.search_range_from_utf16(range))
             .or_else(|| self.search_marked_range.clone())
-            .unwrap_or_else(|| self.search_selected_range.clone())
+            .unwrap_or_else(|| self.search_selected_range.clone());
+        normalize_search_replacement_range(self.search.as_str(), raw_range)
     }
 
-    /// 把搜索偏移夹到合法 UTF-8 字符边界。
-    fn clamp_search_offset_to_boundary(&self, offset: usize) -> usize {
-        if offset >= self.search.len() {
-            return self.search.len();
-        }
-        if self.search.is_char_boundary(offset) {
-            offset
-        } else {
-            self.search
-                .char_indices()
-                .rev()
-                .find_map(|(index, _)| (index < offset).then_some(index))
-                .unwrap_or(0)
-        }
+    /// 把搜索偏移夹到合法 Unicode 字素簇边界。
+    ///
+    /// 搜索输入虽然只是 Select 内部能力，但它同样接入平台输入法和鼠标定位。
+    /// 使用字素簇边界可以保证复合 emoji、组合音标等用户可感知字符不会被搜索光标或替换范围拆开。
+    fn clamp_search_offset_to_grapheme_boundary(&self, offset: usize) -> usize {
+        previous_search_grapheme_boundary(self.search.as_str(), offset)
     }
 
     /// 保证搜索选区和 IME 标记区间不会超出当前搜索词长度。
@@ -674,6 +673,88 @@ fn last_selectable_index(filtered: &[usize], options: &[SelectOption]) -> Option
 /// 把搜索输入规范化为单行文本。
 fn normalize_search_text(text: &str) -> String {
     text.replace(['\r', '\n'], " ")
+}
+
+/// 返回不大于指定偏移的最近搜索文本字素簇边界。
+///
+/// 搜索框中的偏移来源包括鼠标、键盘和平台输入服务。它们都可能在复合字符中间给出 UTF-8
+/// 字节位置，因此状态层统一向前夹到字素簇边界，避免保存会拆坏用户可感知字符的光标位置。
+fn previous_search_grapheme_boundary(text: &str, offset: usize) -> usize {
+    if offset >= text.len() {
+        return text.len();
+    }
+
+    text.grapheme_indices(true)
+        .rev()
+        .find_map(|(index, _)| (index <= offset).then_some(index))
+        .unwrap_or(0)
+}
+
+/// 返回不小于指定偏移的最近搜索文本字素簇边界。
+///
+/// 非空替换区间触碰到复合字符内部时，需要把区间末尾扩展到完整字素末尾；
+/// 这样搜索词不会留下半个 emoji 或半个组合音标，过滤逻辑也能继续处理合法 UTF-8 文本。
+fn next_search_grapheme_boundary(text: &str, offset: usize) -> usize {
+    if offset >= text.len() {
+        return text.len();
+    }
+
+    for (index, grapheme) in text.grapheme_indices(true) {
+        let end = index + grapheme.len();
+        if offset == index {
+            return index;
+        }
+        if offset > index && offset < end {
+            return end;
+        }
+    }
+
+    text.len()
+}
+
+/// 规范化搜索输入的平台替换区间。
+///
+/// 平台文本服务传入的 UTF-16 区间转换后不一定适合直接切片：可能反向、越界或落在字素内部。
+/// 这里复用 TextInput 的边界策略：反向区间忽略，空区间按光标向前夹取，非空区间向外覆盖完整字素。
+fn normalize_search_replacement_range(text: &str, range: Range<usize>) -> Option<Range<usize>> {
+    if range.start > range.end {
+        return None;
+    }
+
+    if range.start == range.end {
+        let cursor = previous_search_grapheme_boundary(text, range.start);
+        return Some(cursor..cursor);
+    }
+
+    let start = previous_search_grapheme_boundary(text, range.start);
+    let end = next_search_grapheme_boundary(text, range.end);
+    Some(start..end)
+}
+
+/// 规范化搜索插入文本内部的新选区范围。
+///
+/// IME composing 过程会把新光标或选区作为“插入文本内 UTF-16 区间”传回组件。
+/// 该区间可能位于复合字素内部，因此需要在相对文本中先做字素簇规范化，再由调用方平移回
+/// 完整搜索词。若平台传入反向范围，这里保持 start > end，沿用后续状态夹取逻辑来记录反向选区。
+fn normalize_inserted_search_selection_range(
+    text: &str,
+    range_utf16: &Range<usize>,
+) -> Range<usize> {
+    let range = range_from_utf16_in(text, range_utf16);
+    if range.start == range.end {
+        let cursor = previous_search_grapheme_boundary(text, range.start);
+        return cursor..cursor;
+    }
+
+    if range.start < range.end {
+        let start = previous_search_grapheme_boundary(text, range.start);
+        let end = next_search_grapheme_boundary(text, range.end);
+        start..end
+    } else {
+        let start = next_search_grapheme_boundary(text, range.start);
+        let end = previous_search_grapheme_boundary(text, range.end);
+        start..end
+    }
 }
 
 /// 在任意字符串中把 UTF-16 偏移转换成 UTF-8 字节偏移。

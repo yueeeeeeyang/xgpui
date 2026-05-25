@@ -97,7 +97,7 @@ impl TextInputState {
 
     /// 移动光标到指定字节偏移。
     pub fn move_to(&mut self, offset: usize) -> TextEditOutcome {
-        let offset = self.clamp_to_boundary(offset);
+        let offset = self.clamp_to_grapheme_boundary(offset);
         let old_range = self.selected_range.clone();
         let old_reversed = self.selection_reversed;
         self.selected_range = offset..offset;
@@ -112,7 +112,7 @@ impl TextInputState {
 
     /// 将选区扩展到指定字节偏移。
     pub fn select_to(&mut self, offset: usize) -> TextEditOutcome {
-        let offset = self.clamp_to_boundary(offset);
+        let offset = self.clamp_to_grapheme_boundary(offset);
         let old_range = self.selected_range.clone();
         let old_reversed = self.selection_reversed;
 
@@ -275,7 +275,9 @@ impl TextInputState {
         let before_reversed = self.selection_reversed;
         let before_marked = self.marked_range.clone();
 
-        let replacement_range = self.replacement_range(range_utf16);
+        let Some(replacement_range) = self.replacement_range(range_utf16) else {
+            return TextEditOutcome::default();
+        };
         let normalized_text = normalize_single_line(new_text);
         let inserted_text = self.truncate_replacement(&replacement_range, &normalized_text);
 
@@ -301,10 +303,11 @@ impl TextInputState {
         self.selected_range = new_selected_range_utf16
             .as_ref()
             .map(|range_utf16| {
-                let relative = range_from_utf16_in(&inserted_text, range_utf16);
-                let start = relative.start.min(inserted_len);
-                let end = relative.end.min(inserted_len);
-                replacement_range.start + start..replacement_range.start + end
+                // 平台输入法返回的新选区是相对插入文本的 UTF-16 区间。
+                // 即使替换目标区间已经规范化，新的光标位置仍可能落在插入文本的复合字素内部；
+                // 因此这里先在插入文本内部做字素簇规范化，再平移回完整内容的字节区间。
+                let relative = normalize_inserted_selection_range(&inserted_text, range_utf16);
+                replacement_range.start + relative.start..replacement_range.start + relative.end
             })
             .unwrap_or_else(|| {
                 let cursor = replacement_range.start + inserted_len;
@@ -322,12 +325,13 @@ impl TextInputState {
     }
 
     /// 返回本次输入应该替换的 UTF-8 字节区间。
-    fn replacement_range(&self, range_utf16: Option<Range<usize>>) -> Range<usize> {
-        range_utf16
+    fn replacement_range(&self, range_utf16: Option<Range<usize>>) -> Option<Range<usize>> {
+        let raw_range = range_utf16
             .as_ref()
             .map(|range| self.range_from_utf16(range))
             .or_else(|| self.marked_range.clone())
-            .unwrap_or_else(|| self.selected_range.clone())
+            .unwrap_or_else(|| self.selected_range.clone());
+        normalize_replacement_range(self.content.as_str(), raw_range)
     }
 
     /// 根据最大长度截断待插入文本。
@@ -370,20 +374,12 @@ impl TextInputState {
         }
     }
 
-    /// 把偏移夹到有效字素簇边界上。
-    fn clamp_to_boundary(&self, offset: usize) -> usize {
-        if offset >= self.content.len() {
-            return self.content.len();
-        }
-        if self.content.is_char_boundary(offset) {
-            offset
-        } else {
-            self.content
-                .char_indices()
-                .rev()
-                .find_map(|(idx, _)| (idx < offset).then_some(idx))
-                .unwrap_or(0)
-        }
+    /// 把偏移夹到有效 Unicode 字素簇边界上。
+    ///
+    /// 鼠标定位和平台输入回调传入的偏移可能落在复合 emoji、组合音标或 ZWJ 序列中间。
+    /// 内部状态只能保存用户可感知字符的边界，否则后续删除、复制或渲染选区会把一个字素拆坏。
+    fn clamp_to_grapheme_boundary(&self, offset: usize) -> usize {
+        previous_grapheme_boundary(self.content.as_str(), offset)
     }
 
     /// 保证选区不会超出当前文本长度。
@@ -434,6 +430,88 @@ pub(super) fn is_valid_number_text(text: &str) -> bool {
     }
 
     true
+}
+
+/// 返回不大于指定偏移的最近 Unicode 字素簇边界。
+///
+/// 与 `str::is_char_boundary` 不同，字素簇边界会把复合 emoji、组合音标等多码点字符
+/// 作为一个用户可感知字符处理。光标移动到非法位置时向前夹取，可以保持“点击字符内部等于点击字符前”
+/// 的稳定行为，也避免后续字符串切片拆开复合字符。
+fn previous_grapheme_boundary(text: &str, offset: usize) -> usize {
+    if offset >= text.len() {
+        return text.len();
+    }
+
+    text.grapheme_indices(true)
+        .rev()
+        .find_map(|(index, _)| (index <= offset).then_some(index))
+        .unwrap_or(0)
+}
+
+/// 返回不小于指定偏移的最近 Unicode 字素簇边界。
+///
+/// 非空替换区间的结束位置如果落在某个字素内部，需要向后扩展到该字素末尾；
+/// 这样平台输入法或系统文本服务传入半个复合字符范围时，组件会替换整个字素而不是留下残缺序列。
+fn next_grapheme_boundary(text: &str, offset: usize) -> usize {
+    if offset >= text.len() {
+        return text.len();
+    }
+
+    for (index, grapheme) in text.grapheme_indices(true) {
+        let end = index + grapheme.len();
+        if offset == index {
+            return index;
+        }
+        if offset > index && offset < end {
+            return end;
+        }
+    }
+
+    text.len()
+}
+
+/// 规范化平台文本替换范围。
+///
+/// 平台输入回调使用 UTF-16 区间，转换到 UTF-8 后仍可能出现反向区间、越界区间或落在字素内部的区间。
+/// 反向区间直接忽略，避免用不可信范围切片；空区间按光标规则向前夹到字素边界；非空区间则向外扩展，
+/// 确保替换操作不会拆开复合字符。
+fn normalize_replacement_range(text: &str, range: Range<usize>) -> Option<Range<usize>> {
+    if range.start > range.end {
+        return None;
+    }
+
+    if range.start == range.end {
+        let cursor = previous_grapheme_boundary(text, range.start);
+        return Some(cursor..cursor);
+    }
+
+    let start = previous_grapheme_boundary(text, range.start);
+    let end = next_grapheme_boundary(text, range.end);
+    Some(start..end)
+}
+
+/// 规范化插入文本内部的新选区范围。
+///
+/// `replace_and_mark_text_in_range` 会收到平台输入法给出的“插入文本内 UTF-16 选区”。
+/// 该范围并不一定落在 Unicode 字素簇边界上，所以不能只做长度裁剪；否则 marked text
+/// 内部的光标仍可能把复合 emoji 或组合音标拆开。这里保留既有的反向选区语义：正向选区向外
+/// 覆盖完整字素，反向选区保持 start > end 交给后续 `clamp_selection_to_content` 标记为反向。
+fn normalize_inserted_selection_range(text: &str, range_utf16: &Range<usize>) -> Range<usize> {
+    let range = range_from_utf16_in(text, range_utf16);
+    if range.start == range.end {
+        let cursor = previous_grapheme_boundary(text, range.start);
+        return cursor..cursor;
+    }
+
+    if range.start < range.end {
+        let start = previous_grapheme_boundary(text, range.start);
+        let end = next_grapheme_boundary(text, range.end);
+        start..end
+    } else {
+        let start = next_grapheme_boundary(text, range.start);
+        let end = previous_grapheme_boundary(text, range.end);
+        start..end
+    }
 }
 
 /// 在任意字符串中把 UTF-16 偏移转换成 UTF-8 字节偏移。

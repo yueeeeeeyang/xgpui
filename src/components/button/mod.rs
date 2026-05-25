@@ -215,7 +215,10 @@ impl Button {
 impl Render for Button {
     /// 渲染 Button。
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let focused = !self.disabled && self.focus_handle.is_focused(window);
+        // loading 与 disabled 都表示当前按钮不能执行业务动作。这里把 loading 也排除在焦点样式外，
+        // 避免用户看到可点击的焦点边框，却在实际按 Enter/Space 或点击时没有任何业务响应。
+        let interactive = !self.disabled && !self.loading;
+        let focused = interactive && self.focus_handle.is_focused(window);
         let resolved = self.resolved_style(focused, cx);
         let tooltip_text = self.tooltip_text();
 
@@ -242,7 +245,7 @@ impl Render for Button {
                 |this| this.min_w(resolved.min_width).px(resolved.padding_x),
             )
             .when_else(
-                self.disabled,
+                !interactive,
                 |this| this.cursor(CursorStyle::Arrow),
                 |this| {
                     this.track_focus(&self.focus_handle)

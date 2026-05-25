@@ -36,6 +36,19 @@ fn cursor_moves_by_grapheme_boundary() {
     assert_eq!(state.previous_boundary(after_family), after_a);
 }
 
+/// 外部偏移即使落在复合字素内部，也应被夹到字素边界，避免后续编辑拆开 emoji。
+#[test]
+fn cursor_offsets_inside_grapheme_are_clamped_to_grapheme_boundary() {
+    let mut state = TextInputState::new("a👨‍👩‍👧‍👦b", None);
+    let family_start = "a".len();
+    let inside_family = family_start + "👨".len();
+
+    let outcome = state.move_to(inside_family);
+
+    assert!(outcome.selection_changed);
+    assert_eq!(state.selected_range(), family_start..family_start);
+}
+
 /// 普通替换应替换当前选区并把光标移动到插入内容末尾。
 #[test]
 fn replace_selected_text_updates_content_and_cursor() {
@@ -48,6 +61,56 @@ fn replace_selected_text_updates_content_and_cursor() {
     assert!(outcome.content_changed);
     assert_eq!(state.as_str(), "hello gpui");
     assert_eq!(state.selected_range(), 10..10);
+}
+
+/// 平台替换范围如果只覆盖复合字素的一部分，应扩展到完整字素，避免留下非法或残缺显示。
+#[test]
+fn partial_grapheme_replacement_expands_to_full_grapheme() {
+    let mut state = TextInputState::new("a👨‍👩‍👧‍👦b", None);
+    let family_start = "a".len();
+    let family_mid = family_start + "👨".len();
+    let family_inner_end = family_mid + "\u{200d}".len();
+    let start_utf16 = state.offset_to_utf16(family_mid);
+    let end_utf16 = state.offset_to_utf16(family_inner_end);
+
+    let outcome = state.replace_text_in_range(Some(start_utf16..end_utf16), "X");
+
+    assert!(outcome.content_changed);
+    assert_eq!(state.as_str(), "aXb");
+    assert_eq!(state.selected_range(), 2..2);
+}
+
+/// IME 返回的新光标如果落在 marked text 的复合字素内部，也应被夹到字素边界。
+#[test]
+fn marked_selected_range_inside_grapheme_is_clamped() {
+    let mut state = TextInputState::new("", None);
+    let inserted = "a👨‍👩‍👧‍👦b";
+    let family_start = "a".len();
+    let inside_family_utf16 = "a👨".encode_utf16().count();
+
+    let outcome = state.replace_and_mark_text_in_range(
+        None,
+        inserted,
+        Some(inside_family_utf16..inside_family_utf16),
+    );
+
+    assert!(outcome.content_changed);
+    assert_eq!(state.as_str(), inserted);
+    assert_eq!(state.marked_range(), Some(0..inserted.len()));
+    assert_eq!(state.selected_range(), family_start..family_start);
+}
+
+/// 反向平台替换范围应被安全忽略，不能用不可信区间直接切片导致 panic。
+#[test]
+fn reversed_platform_replacement_range_is_ignored() {
+    let mut state = TextInputState::new("abc", None);
+    let reversed_start = 3;
+    let reversed_end = 1;
+
+    let outcome = state.replace_text_in_range(Some(reversed_start..reversed_end), "X");
+
+    assert!(!outcome.should_notify());
+    assert_eq!(state.as_str(), "abc");
 }
 
 /// 最大长度应按用户可感知的字素簇计数，而不是按字节数计数。

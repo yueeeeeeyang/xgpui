@@ -879,7 +879,7 @@ impl EntityInputHandler for TextInput {
         _window: &mut Window,
         _cx: &mut Context<Self>,
     ) -> Option<usize> {
-        let bounds = self.last_bounds.clone()?;
+        let bounds = self.last_bounds?;
         let line = self.last_layout.as_ref()?;
         let _local_point = bounds.localize(&point)?;
         let display_index = line.index_for_x(point.x - bounds.left() + self.last_scroll_x)?;
@@ -1158,7 +1158,7 @@ impl Element for TextElement {
         if !disabled {
             window.handle_input(
                 &focus_handle,
-                ElementInputHandler::new(bounds.clone(), self.input.clone()),
+                ElementInputHandler::new(bounds, self.input.clone()),
                 cx,
             );
         }

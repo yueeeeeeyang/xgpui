@@ -217,9 +217,11 @@ fn loading_spinner_start_angle_advances_with_phase() {
 /// loading 圆圈应使用带缺口的圆弧和固定细线宽，避免看起来像静态圆点或粗体图标。
 #[test]
 fn loading_spinner_uses_partial_circle_arc_tokens() {
-    assert!(LOADING_SPINNER_SWEEP_RATIO > 0.5);
-    assert!(LOADING_SPINNER_SWEEP_RATIO < 1.0);
-    assert_eq!(LOADING_SPINNER_STROKE_WIDTH, 2.0);
+    const {
+        assert!(LOADING_SPINNER_SWEEP_RATIO > 0.5);
+        assert!(LOADING_SPINNER_SWEEP_RATIO < 1.0);
+        assert!(LOADING_SPINNER_STROKE_WIDTH == 2.0);
+    }
 }
 
 /// Link 变体应启用下划线并保持最小视觉边界。

@@ -120,6 +120,82 @@ fn search_selection_replace_normalizes_multiline_and_moves_by_grapheme() {
     assert_eq!(state.search_selected_range(), 4..4);
 }
 
+/// 搜索光标即使被鼠标定位到复合字素内部，也应回到字素边界，避免搜索词被拆坏。
+#[test]
+fn search_cursor_offsets_inside_grapheme_are_clamped() {
+    let options = options();
+    let mut state = SelectState::new(None, &options);
+    state.open(&options);
+    state.replace_search_text_in_range(None, "a👨‍👩‍👧‍👦b", &options);
+    let family_start = "a".len();
+    let inside_family = family_start + "👨".len();
+
+    let outcome = state.move_search_cursor(inside_family);
+
+    assert!(outcome.search_selection_changed);
+    assert_eq!(state.search_selected_range(), family_start..family_start);
+}
+
+/// 搜索输入的部分字素替换应扩展到完整字素，避免过滤词留下半个复合 emoji。
+#[test]
+fn partial_search_grapheme_replacement_expands_to_full_grapheme() {
+    let options = options();
+    let mut state = SelectState::new(None, &options);
+    state.open(&options);
+    state.replace_search_text_in_range(None, "a👨‍👩‍👧‍👦b", &options);
+    let family_start = "a".len();
+    let family_mid = family_start + "👨".len();
+    let family_inner_end = family_mid + "\u{200d}".len();
+    let start_utf16 = state.search_offset_to_utf16(family_mid);
+    let end_utf16 = state.search_offset_to_utf16(family_inner_end);
+
+    let outcome = state.replace_search_text_in_range(Some(start_utf16..end_utf16), "X", &options);
+
+    assert!(outcome.search_changed);
+    assert_eq!(state.search(), &SharedString::from("aXb"));
+    assert_eq!(state.search_selected_range(), 2..2);
+}
+
+/// 搜索框 IME 返回的新光标如果落在 marked text 的复合字素内部，也应夹到字素边界。
+#[test]
+fn marked_search_selected_range_inside_grapheme_is_clamped() {
+    let options = options();
+    let mut state = SelectState::new(None, &options);
+    state.open(&options);
+    let inserted = "a👨‍👩‍👧‍👦b";
+    let family_start = "a".len();
+    let inside_family_utf16 = "a👨".encode_utf16().count();
+
+    let outcome = state.replace_and_mark_search_text_in_range(
+        None,
+        inserted,
+        Some(inside_family_utf16..inside_family_utf16),
+        &options,
+    );
+
+    assert!(outcome.search_changed);
+    assert_eq!(state.search(), &SharedString::from(inserted));
+    assert_eq!(state.search_marked_range(), Some(0..inserted.len()));
+    assert_eq!(state.search_selected_range(), family_start..family_start);
+}
+
+/// 反向平台替换范围应被安全忽略，防止系统输入服务异常范围造成 panic。
+#[test]
+fn reversed_search_replacement_range_is_ignored() {
+    let options = options();
+    let mut state = SelectState::new(None, &options);
+    state.open(&options);
+    state.replace_search_text_in_range(None, "abc", &options);
+    let reversed_start = 3;
+    let reversed_end = 1;
+
+    let outcome =
+        state.replace_search_text_in_range(Some(reversed_start..reversed_end), "X", &options);
+
+    assert!(!outcome.should_notify());
+    assert_eq!(state.search(), &SharedString::from("abc"));
+}
+
 /// 键盘移动高亮时应跳过禁用选项。
 #[test]
 fn keyboard_highlight_skips_disabled_options() {
