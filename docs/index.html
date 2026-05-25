@@ -1,7 +1,7 @@
 <!doctype html>
 <!--
   xgpui 使用文档。
-  本文件是 docs 目录下的静态 HTML 文档，描述当前 crate 已提供的 TextInput 和 Select 组件 API、行为和示例。
+  本文件是 docs 目录下的静态 HTML 文档，描述当前 crate 已提供的 Button、TextInput 和 Select 组件 API、行为和示例。
   文档保持零外部依赖，便于在本地直接打开并随项目一起版本化维护。
 -->
 <html lang="zh-CN">
@@ -286,7 +286,11 @@
         <a href="#quick-start">快速开始</a>
         <a href="#themes">明暗皮肤</a>
         <a href="#run-example">运行示例</a>
+        <a href="#button-usage">Button 基础用法</a>
+        <a href="#button-props">ButtonProps</a>
+        <a href="#button-behavior">Button 行为</a>
         <a href="#basic-usage">基础用法</a>
+        <a href="#input-types">输入类型</a>
         <a href="#props">TextInputProps</a>
         <a href="#slots">前后缀插槽</a>
         <a href="#methods">公开方法</a>
@@ -304,15 +308,18 @@
           <p class="eyebrow">Rust UI Library</p>
           <h1>xgpui 使用文档</h1>
           <p>
-            xgpui 是基于 <code>gpui</code> 的 Rust UI 库，当前已提供完整的单行
-            <code>TextInput</code> 组件和单选 <code>Select</code> 下拉框组件。组件支持内部状态、
-            外部同步、常见状态样式和明暗皮肤；<code>TextInput</code> 额外支持 IME、选区、
+            xgpui 是基于 <code>gpui</code> 的 Rust UI 库，当前已提供 <code>Button</code> 按钮组件、
+            完整的单行 <code>TextInput</code> 组件和单选 <code>Select</code> 下拉框组件。组件支持内部状态、
+            外部同步、常见状态样式和明暗皮肤；<code>Button</code> 支持变体、色调、加载和图标，
+            <code>TextInput</code> 额外支持密码、数字、IME、选区、
             剪贴板和光标闪烁，<code>Select</code> 额外支持本地搜索、锚定下拉面板和键盘导航。
           </p>
           <div class="meta">
             <span class="pill">Rust 2021</span>
             <span class="pill">gpui 0.2.2</span>
             <span class="pill">稳定 Rust</span>
+            <span class="pill">Lucide Icons</span>
+            <span class="pill">Button</span>
             <span class="pill">单行 TextInput</span>
             <span class="pill">单选 Select</span>
             <span class="pill">Light / Dark</span>
@@ -325,7 +332,7 @@
           <p>
             当前项目是单 crate UI 库。使用组件时推荐通过
             <code>xgpui::prelude</code> 引入常用类型，并在应用启动时调用 <code>xgpui::install</code>
-            安装库级默认能力。
+            安装库级默认能力，包括主题状态、Lucide 图标字体和默认键盘绑定。
           </p>
           <div class="code-block">
             <pre><code class="language-rust">// 引入 xgpui 常用组件和配置类型。
@@ -373,18 +380,158 @@ let current = xgpui::theme_mode(cx);</code></pre>
         <section class="section" id="run-example">
           <h2>运行示例</h2>
           <p>
-            项目内置了 <code>examples/text_input.rs</code> 和 <code>examples/select.rs</code>，
+            项目内置了 <code>examples/button.rs</code>、<code>examples/text_input.rs</code> 和
+            <code>examples/select.rs</code>，
             可直接运行查看组件效果。
           </p>
           <div class="code-block">
-            <pre><code class="language-bash">cargo run --example text_input
+            <pre><code class="language-bash">cargo run --example button
+cargo run --example text_input
 cargo run --example select</code></pre>
           </div>
           <p>
-            <code>text_input</code> 示例覆盖基础输入、禁用、只读、错误态、helper text、clearable、
+            <code>button</code> 示例覆盖变体、危险色调、尺寸、禁用、加载、块级按钮、图标和明暗皮肤；
+            <code>text_input</code> 示例覆盖基础输入、密码输入、数字输入、禁用、只读、错误态、helper text、clearable、
             前后缀插槽和 <code>set_value</code> 外部同步；<code>select</code> 示例覆盖基础选择、
             搜索、禁用、错误态、clearable、空结果、外部同步和明暗皮肤。
           </p>
+        </section>
+
+        <!-- Button 基础示例展示常见按钮创建方式。 -->
+        <section class="section" id="button-usage">
+          <h2>Button 基础用法</h2>
+          <p>
+            <code>Button</code> 是 gpui entity 组件，通常在父视图构造函数中通过
+            <code>cx.new</code> 创建。按钮支持主按钮、次级按钮、描边按钮、幽灵按钮和链接按钮，
+            并通过 <code>ButtonTone::Danger</code> 表示危险操作。
+          </p>
+          <div class="code-block">
+            <pre><code class="language-rust">/// 示例父视图，持有一个 Button 实体。
+struct Toolbar {
+    save: Entity&lt;Button&gt;,
+}
+
+impl Toolbar {
+    /// 创建一个带前置图标的主按钮。
+    fn new(cx: &mut Context&lt;Self&gt;) -&gt; Self {
+        let save = cx.new(|cx| {
+            Button::new(
+                cx,
+                ButtonProps::default()
+                    .label("保存")
+                    .leading_icon(LucideIcon::Save)
+                    .on_click(|| {
+                        // 在这里执行保存动作；loading / disabled 时不会触发。
+                    }),
+            )
+        });
+
+        Self { save }
+    }
+}</code></pre>
+          </div>
+          <p class="note">
+            <code>Button</code> 的图标统一使用内置 Lucide 字体。使用图标前仍需调用
+            <code>xgpui::install(cx)</code>，否则图标字体不会被安装到 gpui 文本系统。
+          </p>
+        </section>
+
+        <!-- Button Props 表格逐项说明当前公开配置。 -->
+        <section class="section" id="button-props">
+          <h2>ButtonProps</h2>
+          <p>
+            <code>ButtonProps::default()</code> 提供默认主按钮配置，可通过链式方法覆盖需要的属性。
+          </p>
+          <table class="api-table">
+            <thead>
+              <tr>
+                <th>属性</th>
+                <th>类型</th>
+                <th>说明</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>label</code></td>
+                <td><code>SharedString</code></td>
+                <td>按钮文案。纯图标按钮会隐藏文案，但会用它作为 tooltip fallback。</td>
+              </tr>
+              <tr>
+                <td><code>variant</code></td>
+                <td><code>ButtonVariant</code></td>
+                <td><code>Primary</code>、<code>Secondary</code>、<code>Outline</code>、<code>Ghost</code>、<code>Link</code>。</td>
+              </tr>
+              <tr>
+                <td><code>tone</code></td>
+                <td><code>ButtonTone</code></td>
+                <td><code>Default</code> 或 <code>Danger</code>，用于表达默认操作或危险操作。</td>
+              </tr>
+              <tr>
+                <td><code>size</code></td>
+                <td><code>ButtonSize</code></td>
+                <td><code>Small</code>、<code>Medium</code>、<code>Large</code>，影响高度、字号、内边距和图标尺寸。</td>
+              </tr>
+              <tr>
+                <td><code>disabled</code></td>
+                <td><code>bool</code></td>
+                <td>禁用后不可聚焦、不可点击，也不会触发 <code>on_click</code>。</td>
+              </tr>
+              <tr>
+                <td><code>loading</code></td>
+                <td><code>bool</code></td>
+                <td>展示圆圈 loading 动画并阻止鼠标和键盘触发。</td>
+              </tr>
+              <tr>
+                <td><code>block</code></td>
+                <td><code>bool</code></td>
+                <td>按钮宽度占满父容器。</td>
+              </tr>
+              <tr>
+                <td><code>icon_only</code></td>
+                <td><code>bool</code></td>
+                <td>渲染正方形纯图标按钮，建议同时提供图标和 tooltip。</td>
+              </tr>
+              <tr>
+                <td><code>leading_icon</code> / <code>trailing_icon</code></td>
+                <td><code>Option&lt;LucideIcon&gt;</code></td>
+                <td>前置和后置 Lucide 图标。加载状态会临时用 loading 圆圈动画替代前置图标。</td>
+              </tr>
+              <tr>
+                <td><code>tooltip</code></td>
+                <td><code>Option&lt;SharedString&gt;</code></td>
+                <td>hover 提示文案。纯图标按钮未设置时会回退使用 <code>label</code>。</td>
+              </tr>
+              <tr>
+                <td><code>on_click</code></td>
+                <td><code>Option&lt;Box&lt;dyn FnMut()&gt;&gt;</code></td>
+                <td>有效点击回调，只在非禁用且非加载时触发。</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <!-- Button 行为说明帮助使用者理解键盘和状态边界。 -->
+        <section class="section" id="button-behavior">
+          <h2>Button 行为</h2>
+          <div class="two-col">
+            <div class="mini-card">
+              <h3>交互</h3>
+              <ul>
+                <li>鼠标点击会先聚焦按钮，再触发 <code>on_click</code>。</li>
+                <li>按钮聚焦后，点击按钮外部区域会释放焦点并移除焦点边框。</li>
+                <li>按钮获得焦点后，<code>Enter</code> 和 <code>Space</code> 会触发点击回调。</li>
+                <li><code>disabled</code> 和 <code>loading</code> 都会阻止点击回调。</li>
+              </ul>
+            </div>
+            <div class="mini-card">
+              <h3>视觉</h3>
+              <ul>
+                <li>所有颜色来自 <code>foundation::theme::ButtonTheme</code>，支持亮色和暗色皮肤。</li>
+                <li><code>icon_only</code> 使用正方形尺寸，并隐藏 <code>label</code> 文本。</li>
+                <li>loading 图标使用 gpui 动画系统驱动圆环弧线持续转动，不改变按钮布局尺寸。</li>
+              </ul>
+            </div>
+          </div>
         </section>
 
         <!-- 基础示例展示最小可用的 TextInput 创建方式。 -->
@@ -428,6 +575,54 @@ impl Render for FormView {
         div().child(self.username.clone())
     }
 }</code></pre>
+          </div>
+        </section>
+
+        <!-- 输入类型章节说明 TextInputType 的行为边界，避免使用者误以为 Number 会解析为数值。 -->
+        <section class="section" id="input-types">
+          <h2>输入类型</h2>
+          <p>
+            <code>TextInputType</code> 用于配置输入框内容语义。当前支持 <code>Text</code>、
+            <code>Password</code> 和 <code>Number</code>；组件值始终是 <code>SharedString</code>，
+            不会因为类型不同而返回掩码文本或数值类型。
+          </p>
+          <div class="code-block">
+            <pre><code class="language-rust">let password = cx.new(|cx| {
+    TextInput::new(
+        cx,
+        TextInputProps::default()
+            .input_type(TextInputType::Password)
+            .placeholder("请输入密码")
+            .clearable(true),
+    )
+});
+
+let amount = cx.new(|cx| {
+    TextInput::new(
+        cx,
+        TextInputProps::default()
+            .input_type(TextInputType::Number)
+            .placeholder("请输入金额"),
+    )
+});</code></pre>
+          </div>
+          <div class="two-col">
+            <div class="mini-card">
+              <h3>Password</h3>
+              <ul>
+                <li>默认按 Unicode 字素簇显示为掩码字符。</li>
+                <li>非禁用状态下始终显示眼睛按钮，可切换真实内容展示。</li>
+                <li><code>value</code>、<code>on_change</code>、复制和剪切都使用真实文本。</li>
+              </ul>
+            </div>
+            <div class="mini-card">
+              <h3>Number</h3>
+              <ul>
+                <li>允许空值、负号、小数点以及 <code>1.</code>、<code>-.5</code> 等输入中间态。</li>
+                <li>拒绝字母、多小数点和错误位置的负号。</li>
+                <li>不做 min、max、step、格式化或数值解析。</li>
+              </ul>
+            </div>
           </div>
         </section>
 
@@ -495,6 +690,11 @@ impl Render for FormView {
                 <td><code>status</code></td>
                 <td><code>TextInputStatus</code></td>
                 <td><code>Default</code>、<code>Error</code>、<code>Warning</code>、<code>Success</code>，只负责语义颜色。</td>
+              </tr>
+              <tr>
+                <td><code>input_type</code></td>
+                <td><code>TextInputType</code></td>
+                <td><code>Text</code>、<code>Password</code>、<code>Number</code>，控制密码掩码和数字输入限制。</td>
               </tr>
               <tr>
                 <td><code>helper_text</code></td>
@@ -619,6 +819,8 @@ impl Render for FormView {
                 <li>支持单行输入，粘贴多行文本时会把换行规范化为空格。</li>
                 <li>支持 Backspace、Delete、方向键、Home、End、全选、复制、剪切和粘贴。</li>
                 <li>支持中文输入法 marked text 和候选框范围定位。</li>
+                <li>密码类型只改变显示文本，不改变真实值和剪贴板文本。</li>
+                <li>数字类型会拒绝不符合数字形态的键盘输入、粘贴和 IME 提交。</li>
               </ul>
             </div>
             <div class="mini-card">
@@ -895,7 +1097,8 @@ impl Render for FormView {
         <section class="section" id="notes">
           <h2>实现约束</h2>
           <ul>
-            <li>当前版本只实现单行 <code>TextInput</code>，不包含 password、search、number 或 textarea。</li>
+            <li><code>Button</code> 第一版支持常用单按钮能力，不包含按钮组、异步状态管理或任意元素插槽。</li>
+            <li>当前版本只实现单行 <code>TextInput</code>，包含普通文本、密码和数字类型，不包含 email、search 或 textarea。</li>
             <li>当前版本只实现单选 <code>Select</code>，不包含多选、远程加载、分组、虚拟列表或自定义 option 渲染。</li>
             <li>项目优先使用稳定 Rust，不引入 nightly 特性。</li>
             <li>新功能应按模块、类型和职责拆分，避免把组件逻辑堆在单个文件或单个方法中。</li>
@@ -903,7 +1106,7 @@ impl Render for FormView {
             <li>所有新增或扩展组件都需要同步实现明暗皮肤，并通过 <code>foundation::theme</code> 解析颜色 token。</li>
           </ul>
           <p class="note warning">
-            如果需要新增密码输入、数字输入、表单校验、多行文本、多选 Select 或远程搜索，
+            如果需要新增按钮组、按钮任意元素插槽、表单校验、多行文本、多选 Select 或远程搜索，
             请先补充交互需求和 API 预期，
             再扩展组件层次和状态模型。
           </p>

@@ -2,7 +2,11 @@
 //!
 //! 这些测试聚焦文本编辑核心行为，不启动 gpui 窗口，从而保持测试稳定和快速。
 
-use super::state::{normalize_single_line, TextInputState};
+use super::{
+    display::TextDisplayText,
+    props::TextInputType,
+    state::{is_valid_number_text, normalize_single_line, TextInputState},
+};
 
 /// UTF-8 与 UTF-16 偏移应能正确处理非 ASCII 字符。
 #[test]
@@ -105,4 +109,75 @@ fn deletion_is_allowed_when_max_length_is_reached() {
 
     assert!(outcome.content_changed);
     assert_eq!(state.as_str(), "a");
+}
+
+/// 密码隐藏时应按字素簇生成掩码，并能在真实偏移和显示偏移之间互相转换。
+#[test]
+fn password_display_maps_offsets_by_grapheme() {
+    let display = TextDisplayText::new("a你👨‍👩‍👧‍👦", TextInputType::Password, false);
+
+    assert_eq!(display.text().as_str(), "•••");
+    assert_eq!(display.actual_to_display("a".len()), "•".len());
+    assert_eq!(display.actual_to_display("a你".len()), "••".len());
+    assert_eq!(display.display_to_actual("••".len()), "a你".len());
+}
+
+/// 密码可见时应展示真实文本，偏移映射也应保持真实文本边界。
+#[test]
+fn visible_password_keeps_plain_display_text() {
+    let display = TextDisplayText::new("secret", TextInputType::Password, true);
+
+    assert_eq!(display.text().as_str(), "secret");
+    assert_eq!(display.actual_to_display(3), 3);
+    assert_eq!(display.display_to_actual(3), 3);
+}
+
+/// 数字类型应允许用户输入过程中的合理中间态。
+#[test]
+fn number_type_accepts_intermediate_number_text() {
+    for text in ["", "-", ".", "-.", "1", "-1", "1.", ".5", "-0.5"] {
+        assert!(is_valid_number_text(text), "{text} should be valid");
+    }
+}
+
+/// 数字类型应拒绝非数字形态文本。
+#[test]
+fn number_type_rejects_invalid_number_text() {
+    for text in ["a", "1a", "1.2.3", "1-2", "--1", "1 2"] {
+        assert!(!is_valid_number_text(text), "{text} should be invalid");
+    }
+}
+
+/// 数字状态应拒绝会让完整内容变成非法数字形态的替换。
+#[test]
+fn number_state_rejects_invalid_replacement() {
+    let mut state = TextInputState::new_with_type("12", None, TextInputType::Number);
+    state.move_to(state.as_str().len());
+
+    let outcome = state.replace_text_in_range(None, "a");
+
+    assert!(!outcome.content_changed);
+    assert_eq!(state.as_str(), "12");
+}
+
+/// 数字状态应允许合法小数和负数中间态。
+#[test]
+fn number_state_accepts_valid_replacement() {
+    let mut state = TextInputState::new_with_type("-", None, TextInputType::Number);
+    state.move_to(state.as_str().len());
+
+    let dot = state.replace_text_in_range(None, ".");
+    let digit = state.replace_text_in_range(None, "5");
+
+    assert!(dot.content_changed);
+    assert!(digit.content_changed);
+    assert_eq!(state.as_str(), "-.5");
+}
+
+/// 外部同步数字值时，非法完整值不能进入内部状态。
+#[test]
+fn number_state_drops_invalid_external_value() {
+    let state = TextInputState::new_with_type("abc", None, TextInputType::Number);
+
+    assert_eq!(state.as_str(), "");
 }

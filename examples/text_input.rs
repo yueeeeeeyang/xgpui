@@ -1,6 +1,7 @@
 //! `TextInput` 组件示例。
 //!
-//! 该示例展示基础输入、禁用、只读、错误态、helper text、清除按钮、任意前后缀插槽和外部同步值。
+//! 该示例展示基础输入、密码输入、数字输入、禁用、只读、错误态、helper text、清除按钮、
+//! 任意前后缀插槽和外部同步值。
 
 use gpui::prelude::*;
 use gpui::{
@@ -12,6 +13,8 @@ use xgpui::prelude::*;
 /// 示例窗口根视图。
 struct TextInputExample {
     basic: Entity<TextInput>,
+    password: Entity<TextInput>,
+    number: Entity<TextInput>,
     disabled: Entity<TextInput>,
     readonly: Entity<TextInput>,
     error: Entity<TextInput>,
@@ -29,6 +32,30 @@ impl TextInputExample {
                     .placeholder("请输入用户名")
                     .clearable(true)
                     .helper_text(Some(SharedString::from("支持复制、粘贴、拖选和中文输入法"))),
+            )
+        });
+        let password = cx.new(|cx| {
+            TextInput::new(
+                cx,
+                TextInputProps::default()
+                    .input_type(TextInputType::Password)
+                    .placeholder("请输入密码")
+                    .clearable(true)
+                    .helper_text(Some(SharedString::from(
+                        "密码默认隐藏，点击眼睛图标可切换显示",
+                    ))),
+            )
+        });
+        let number = cx.new(|cx| {
+            TextInput::new(
+                cx,
+                TextInputProps::default()
+                    .input_type(TextInputType::Number)
+                    .placeholder("请输入金额")
+                    .clearable(true)
+                    .helper_text(Some(SharedString::from(
+                        "数字类型允许负号和小数中间态，不做格式化",
+                    ))),
             )
         });
         let disabled = cx.new(|cx| {
@@ -95,6 +122,8 @@ impl TextInputExample {
 
         Self {
             basic,
+            password,
+            number,
             disabled,
             readonly,
             error,
@@ -149,6 +178,8 @@ impl Render for TextInputExample {
                     ),
             )
             .child(section("基础输入", self.basic.clone(), palette))
+            .child(section("密码输入", self.password.clone(), palette))
+            .child(section("数字输入", self.number.clone(), palette))
             .child(section("禁用状态", self.disabled.clone(), palette))
             .child(section("只读状态", self.readonly.clone(), palette))
             .child(section("错误状态", self.error.clone(), palette))
@@ -277,7 +308,7 @@ fn main() {
     Application::new().run(|cx: &mut App| {
         xgpui::install(cx);
 
-        let bounds = Bounds::centered(None, size(px(560.0), px(660.0)), cx);
+        let bounds = Bounds::centered(None, size(px(560.0), px(760.0)), cx);
         cx.open_window(
             WindowOptions {
                 window_bounds: Some(WindowBounds::Windowed(bounds)),

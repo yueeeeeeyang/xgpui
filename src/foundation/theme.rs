@@ -146,6 +146,63 @@ pub struct SelectTheme {
     pub popup_offset: Pixels,
 }
 
+/// `Button` 使用的默认主题 token。
+///
+/// Button 的变体数量多于输入框，因此主题同时提供默认色调和危险色调的主色、
+/// 弱背景、边框、文本、hover 和 active token。组件样式层负责把这些 token 映射到具体变体，
+/// 主题层只保存跨组件可复用的设计语义。
+#[derive(Clone, Copy, Debug)]
+pub struct ButtonTheme {
+    /// 默认主按钮背景色。
+    pub primary_background: Hsla,
+    /// 默认主按钮 hover 背景色。
+    pub primary_hover_background: Hsla,
+    /// 默认主按钮按下背景色。
+    pub primary_active_background: Hsla,
+    /// 默认主按钮文字和图标颜色。
+    pub primary_text: Hsla,
+    /// 危险主按钮背景色。
+    pub danger_background: Hsla,
+    /// 危险主按钮 hover 背景色。
+    pub danger_hover_background: Hsla,
+    /// 危险主按钮按下背景色。
+    pub danger_active_background: Hsla,
+    /// 危险主按钮文字和图标颜色。
+    pub danger_text: Hsla,
+    /// 次级按钮背景色。
+    pub secondary_background: Hsla,
+    /// 次级按钮 hover 背景色。
+    pub secondary_hover_background: Hsla,
+    /// 次级按钮按下背景色。
+    pub secondary_active_background: Hsla,
+    /// 默认正文按钮文字颜色。
+    pub text: Hsla,
+    /// 弱化按钮文字颜色，用于禁用态或弱边界场景。
+    pub muted_text: Hsla,
+    /// 默认边框色。
+    pub border: Hsla,
+    /// 默认透明按钮 hover 背景色。
+    pub ghost_hover_background: Hsla,
+    /// 默认透明按钮按下背景色。
+    pub ghost_active_background: Hsla,
+    /// 危险透明按钮 hover 背景色。
+    pub danger_ghost_hover_background: Hsla,
+    /// 危险透明按钮按下背景色。
+    pub danger_ghost_active_background: Hsla,
+    /// 聚焦描边色。
+    pub focus: Hsla,
+    /// 禁用态背景色。
+    pub disabled_background: Hsla,
+    /// 禁用态边框色。
+    pub disabled_border: Hsla,
+    /// 禁用态文字和图标颜色。
+    pub disabled_text: Hsla,
+    /// 默认圆角。
+    pub radius: Pixels,
+    /// 按钮内部文本与图标间距。
+    pub gap: Pixels,
+}
+
 /// 确保应用已经拥有 xgpui 主题全局状态。
 ///
 /// `install` 会调用该函数；如果调用方先手动设置过主题，这里不会覆盖已有选择。
@@ -199,6 +256,14 @@ pub fn select_theme(cx: &App) -> SelectTheme {
     match theme_mode(cx) {
         ThemeMode::Light => light_select_theme(),
         ThemeMode::Dark => dark_select_theme(),
+    }
+}
+
+/// 返回当前应用 `Button` 应使用的主题。
+pub fn button_theme(cx: &App) -> ButtonTheme {
+    match theme_mode(cx) {
+        ThemeMode::Light => light_button_theme(),
+        ThemeMode::Dark => dark_button_theme(),
     }
 }
 
@@ -317,5 +382,65 @@ fn dark_select_theme() -> SelectTheme {
         popup_radius: radius::md(),
         gap: spacing::sm(),
         popup_offset: spacing::xs(),
+    }
+}
+
+/// 返回亮色皮肤下的 `Button` 主题。
+fn light_button_theme() -> ButtonTheme {
+    ButtonTheme {
+        primary_background: color::primary_500(),
+        primary_hover_background: color::primary_600(),
+        primary_active_background: color::primary_700(),
+        primary_text: color::neutral_0(),
+        danger_background: color::danger_500(),
+        danger_hover_background: color::danger_600(),
+        danger_active_background: color::danger_700(),
+        danger_text: color::neutral_0(),
+        secondary_background: color::neutral_100(),
+        secondary_hover_background: color::neutral_200(),
+        secondary_active_background: color::neutral_300(),
+        text: color::neutral_900(),
+        muted_text: color::neutral_500(),
+        border: color::neutral_200(),
+        ghost_hover_background: color::neutral_100(),
+        ghost_active_background: color::neutral_200(),
+        danger_ghost_hover_background: color::danger_50(),
+        danger_ghost_active_background: color::danger_50().opacity(0.82),
+        focus: color::primary_500(),
+        disabled_background: color::neutral_100(),
+        disabled_border: color::neutral_200(),
+        disabled_text: color::neutral_400(),
+        radius: radius::md(),
+        gap: spacing::sm(),
+    }
+}
+
+/// 返回暗色皮肤下的 `Button` 主题。
+fn dark_button_theme() -> ButtonTheme {
+    ButtonTheme {
+        primary_background: color::dark_primary_button(),
+        primary_hover_background: color::dark_primary_button_hover(),
+        primary_active_background: color::dark_primary_button_active(),
+        primary_text: color::neutral_0(),
+        danger_background: color::dark_danger_button(),
+        danger_hover_background: color::dark_danger_button_hover(),
+        danger_active_background: color::dark_danger_button_active(),
+        danger_text: color::neutral_0(),
+        secondary_background: color::dark_filled_background(),
+        secondary_hover_background: color::dark_border(),
+        secondary_active_background: color::dark_muted_border(),
+        text: color::dark_text(),
+        muted_text: color::dark_helper(),
+        border: color::dark_border(),
+        ghost_hover_background: color::dark_option_hover(),
+        ghost_active_background: color::dark_clear_button_hover(),
+        danger_ghost_hover_background: color::dark_danger().opacity(0.16),
+        danger_ghost_active_background: color::dark_danger().opacity(0.24),
+        focus: color::dark_primary(),
+        disabled_background: color::dark_filled_background(),
+        disabled_border: color::dark_muted_border(),
+        disabled_text: color::dark_disabled_text(),
+        radius: radius::md(),
+        gap: spacing::sm(),
     }
 }

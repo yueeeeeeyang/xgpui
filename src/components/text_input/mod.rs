@@ -15,6 +15,7 @@ use gpui::{
     UTF16Selection, UnderlineStyle, WeakEntity, Window,
 };
 
+mod display;
 mod props;
 mod state;
 mod style;
@@ -22,7 +23,10 @@ mod style;
 #[cfg(test)]
 mod tests;
 
-pub use props::{TextInputProps, TextInputSize, TextInputSlot, TextInputStatus, TextInputVariant};
+use display::TextDisplayText;
+pub use props::{
+    TextInputProps, TextInputSize, TextInputSlot, TextInputStatus, TextInputType, TextInputVariant,
+};
 use state::{TextEditOutcome, TextInputState};
 use style::{resolve_text_input_style, ResolvedTextInputStyle};
 
@@ -84,6 +88,10 @@ pub struct TextInput {
     readonly: bool,
     clearable: bool,
     required: bool,
+    /// 当前输入框的内容类型，用于决定数字输入限制和密码显示方式。
+    input_type: TextInputType,
+    /// 密码类型当前是否明文展示；真实值始终保存在 `state` 中，不受该标记影响。
+    password_visible: bool,
     size: TextInputSize,
     variant: TextInputVariant,
     status: TextInputStatus,
@@ -96,6 +104,8 @@ pub struct TextInput {
     on_enter: Option<props::TextInputEnterHandler>,
     on_key_down: Option<props::TextInputKeyDownHandler>,
     last_layout: Option<ShapedLine>,
+    /// 最近一次绘制使用的显示文本映射，用于把鼠标坐标和平台输入查询反算回真实文本偏移。
+    last_display_text: Option<TextDisplayText>,
     last_bounds: Option<Bounds<Pixels>>,
     last_scroll_x: Pixels,
     is_selecting: bool,
@@ -126,12 +136,14 @@ impl TextInput {
     pub fn new(cx: &mut Context<Self>, props: TextInputProps) -> Self {
         Self {
             focus_handle: cx.focus_handle(),
-            state: TextInputState::new(props.value, props.max_length),
+            state: TextInputState::new_with_type(props.value, props.max_length, props.input_type),
             placeholder: props.placeholder,
             disabled: props.disabled,
             readonly: props.readonly,
             clearable: props.clearable,
             required: props.required,
+            input_type: props.input_type,
+            password_visible: false,
             size: props.size,
             variant: props.variant,
             status: props.status,
@@ -144,6 +156,7 @@ impl TextInput {
             on_enter: props.on_enter,
             on_key_down: props.on_key_down,
             last_layout: None,
+            last_display_text: None,
             last_bounds: None,
             last_scroll_x: px(0.0),
             is_selecting: false,
@@ -214,6 +227,14 @@ impl TextInput {
     /// 清除按钮只在输入框拥有焦点时展示；失焦后隐藏，避免静态表单里出现多余的悬浮操作入口。
     fn show_clear_button(&self, focused: bool) -> bool {
         focused && self.clearable && self.can_edit() && !self.state.content().is_empty()
+    }
+
+    /// 是否应该显示密码可见性切换按钮。
+    ///
+    /// 密码按钮与清除按钮不同，它用于控制安全展示语义，因此只要是可用的密码输入框就始终展示，
+    /// 即使当前输入框没有焦点也允许用户直接查看或隐藏密码。
+    fn show_password_visibility_button(&self) -> bool {
+        self.input_type == TextInputType::Password && !self.disabled
     }
 
     /// 当前渲染样式。
@@ -364,7 +385,11 @@ impl TextInput {
             return self.state.content().len();
         }
 
-        line.closest_index_for_x(position.x - bounds.left() + scroll_x)
+        let display_index = line.closest_index_for_x(position.x - bounds.left() + scroll_x);
+        self.last_display_text
+            .as_ref()
+            .map(|display| display.display_to_actual(display_index))
+            .unwrap_or(display_index)
     }
 
     /// 根据鼠标位置计算文本字节偏移。
@@ -482,6 +507,11 @@ impl TextInput {
             AutoScrollDirection::Right => bounds.right(),
         };
         let target = line.closest_index_for_x(edge_x - bounds.left() + next_scroll);
+        let target = self
+            .last_display_text
+            .as_ref()
+            .map(|display| display.display_to_actual(target))
+            .unwrap_or(target);
         let mut outcome = self.state.select_to(target);
         outcome.selection_changed = true;
         Some(outcome)
@@ -718,6 +748,23 @@ impl TextInput {
             window.focus(&self.focus_handle);
         }
     }
+
+    /// 响应密码显示/隐藏按钮点击。
+    fn on_password_visibility_click(
+        &mut self,
+        _: &gpui::ClickEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.disabled || self.input_type != TextInputType::Password {
+            return;
+        }
+
+        self.password_visible = !self.password_visible;
+        window.focus(&self.focus_handle);
+        self.restart_cursor_blink(cx);
+        cx.notify();
+    }
 }
 
 impl EntityInputHandler for TextInput {
@@ -808,13 +855,18 @@ impl EntityInputHandler for TextInput {
     ) -> Option<Bounds<Pixels>> {
         let line = self.last_layout.as_ref()?;
         let range = self.state.range_from_utf16(&range_utf16);
+        let display_range = self
+            .last_display_text
+            .as_ref()
+            .map(|display| display.actual_range_to_display(range.clone()))
+            .unwrap_or(range);
         Some(Bounds::from_corners(
             point(
-                bounds.left() + line.x_for_index(range.start) - self.last_scroll_x,
+                bounds.left() + line.x_for_index(display_range.start) - self.last_scroll_x,
                 bounds.top(),
             ),
             point(
-                bounds.left() + line.x_for_index(range.end) - self.last_scroll_x,
+                bounds.left() + line.x_for_index(display_range.end) - self.last_scroll_x,
                 bounds.bottom(),
             ),
         ))
@@ -830,7 +882,12 @@ impl EntityInputHandler for TextInput {
         let bounds = self.last_bounds.clone()?;
         let line = self.last_layout.as_ref()?;
         let _local_point = bounds.localize(&point)?;
-        let utf8_index = line.index_for_x(point.x - bounds.left() + self.last_scroll_x)?;
+        let display_index = line.index_for_x(point.x - bounds.left() + self.last_scroll_x)?;
+        let utf8_index = self
+            .last_display_text
+            .as_ref()
+            .map(|display| display.display_to_actual(display_index))
+            .unwrap_or(display_index);
         Some(self.state.offset_to_utf16(utf8_index))
     }
 }
@@ -843,6 +900,7 @@ struct TextElement {
 /// `TextElement` 在 prepaint 阶段计算出的绘制状态。
 struct PrepaintState {
     line: Option<ShapedLine>,
+    display_text: TextDisplayText,
     cursor: Option<PaintQuad>,
     selection: Option<PaintQuad>,
     scroll_x: Pixels,
@@ -1004,12 +1062,14 @@ impl Element for TextElement {
         let selected_range = input.state.selected_range();
         let cursor = input.state.cursor_offset();
         let marked_range = input.state.marked_range();
+        let display =
+            TextDisplayText::new(content.as_str(), input.input_type, input.password_visible);
         let text_style = window.text_style();
 
         let (display_text, text_color) = if content.is_empty() {
             (input.placeholder.clone(), resolved.placeholder)
         } else {
-            (content, resolved.text)
+            (display.text().clone(), resolved.text)
         };
 
         let base_run = TextRun {
@@ -1024,7 +1084,7 @@ impl Element for TextElement {
         let runs = if !display_text.is_empty() {
             marked_runs(
                 display_text.len(),
-                marked_range,
+                marked_range.map(|range| display.actual_range_to_display(range)),
                 base_run,
                 resolved.marked_underline,
             )
@@ -1037,20 +1097,21 @@ impl Element for TextElement {
             .text_system()
             .shape_line(display_text, font_size, &runs, None);
 
-        let cursor_x = line.x_for_index(cursor);
+        let cursor_x = line.x_for_index(display.actual_to_display(cursor));
         let scroll_x = next_scroll_x(input.last_scroll_x, cursor_x, bounds.size.width);
         let cursor_screen_x = bounds.left() + cursor_x - scroll_x;
         let selection = if selected_range.is_empty() || input.state.content().is_empty() {
             None
         } else {
+            let display_selection = display.actual_range_to_display(selected_range.clone());
             Some(fill(
                 Bounds::from_corners(
                     point(
-                        bounds.left() + line.x_for_index(selected_range.start) - scroll_x,
+                        bounds.left() + line.x_for_index(display_selection.start) - scroll_x,
                         bounds.top(),
                     ),
                     point(
-                        bounds.left() + line.x_for_index(selected_range.end) - scroll_x,
+                        bounds.left() + line.x_for_index(display_selection.end) - scroll_x,
                         bounds.bottom(),
                     ),
                 ),
@@ -1071,6 +1132,7 @@ impl Element for TextElement {
 
         PrepaintState {
             line: Some(line),
+            display_text: display,
             cursor,
             selection,
             scroll_x,
@@ -1125,6 +1187,7 @@ impl Element for TextElement {
 
         self.input.update(cx, |input, _cx| {
             input.last_layout = Some(line);
+            input.last_display_text = Some(prepaint.display_text.clone());
             input.last_bounds = Some(bounds);
             input.last_scroll_x = prepaint.scroll_x;
         });
@@ -1139,11 +1202,15 @@ impl Render for TextInput {
         let focused = !self.disabled && self.focus_handle.is_focused(window);
         let resolved = self.resolved_style(focused, cx);
         let show_clear = self.show_clear_button(focused);
+        let show_password_visibility = self.show_password_visibility_button();
+        let password_visible = self.password_visible;
         let prefix = self.prefix.clone();
         let suffix = self.suffix.clone();
         let helper_text = self.helper_text.clone();
         let required = self.required;
-        let clear_button_has_following_content = required || suffix.is_some();
+        let clear_button_has_following_content =
+            show_password_visibility || required || suffix.is_some();
+        let password_button_has_following_content = required || suffix.is_some();
 
         let field = div()
             .flex()
@@ -1204,6 +1271,16 @@ impl Render for TextInput {
                         .on_click(cx.listener(Self::on_clear_click)),
                 )
             })
+            .when(show_password_visibility, |this| {
+                this.child(
+                    password_visibility_button(
+                        resolved,
+                        password_visible,
+                        password_button_has_following_content,
+                    )
+                    .on_click(cx.listener(Self::on_password_visibility_click)),
+                )
+            })
             .when(required, |this| this.child(required_marker()))
             .when_some(suffix, |this, slot| this.child(slot.render()));
 
@@ -1255,6 +1332,42 @@ fn clear_button(
         .child(ClearIconElement {
             color: resolved.clear_button_text,
         })
+        .hover(move |style| style.bg(resolved.clear_button_background))
+}
+
+/// 构造密码显示/隐藏按钮元素。
+fn password_visibility_button(
+    resolved: ResolvedTextInputStyle,
+    password_visible: bool,
+    has_following_content: bool,
+) -> gpui::Stateful<gpui::Div> {
+    // 当密码按钮是输入框最右侧交互元素时，向右贴近边界；后面还有必填标记或后缀时则保持普通间距。
+    let end_margin = if has_following_content {
+        px(0.0)
+    } else {
+        -px(6.0)
+    };
+    let icon = if password_visible {
+        crate::foundation::icon::LucideIcon::EyeOff
+    } else {
+        crate::foundation::icon::LucideIcon::Eye
+    };
+
+    div()
+        .id("xgpui-text-input-password-visibility")
+        .flex()
+        .items_center()
+        .justify_center()
+        .flex_none()
+        .size(px(20.0))
+        .mr(end_margin)
+        .rounded(crate::foundation::radius::full())
+        .cursor(CursorStyle::PointingHand)
+        .child(crate::foundation::icon::lucide_icon(
+            icon,
+            resolved.clear_button_text,
+            px(16.0),
+        ))
         .hover(move |style| style.bg(resolved.clear_button_background))
 }
 

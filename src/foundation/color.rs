@@ -4,6 +4,11 @@
 
 use gpui::{rgb, rgba, Hsla};
 
+/// 完全透明颜色，用于无背景或无边框但仍需要占位样式值的场景。
+pub fn transparent() -> Hsla {
+    rgba(0x0000_0000).into()
+}
+
 /// 页面或输入框的基础白色背景。
 pub fn neutral_0() -> Hsla {
     rgb(0xffffff).into()
@@ -49,6 +54,16 @@ pub fn primary_500() -> Hsla {
     rgb(0x2563eb).into()
 }
 
+/// 主色深一阶，用于主按钮 hover 背景。
+pub fn primary_600() -> Hsla {
+    rgb(0x1d4ed8).into()
+}
+
+/// 主色更深一阶，用于主按钮按下背景。
+pub fn primary_700() -> Hsla {
+    rgb(0x1e40af).into()
+}
+
 /// 主色浅背景，用于已选或高亮选项的弱强调底色。
 pub fn primary_50() -> Hsla {
     rgb(0xeff6ff).into()
@@ -62,6 +77,21 @@ pub fn primary_100() -> Hsla {
 /// 错误色，用于错误状态边框和错误提示。
 pub fn danger_500() -> Hsla {
     rgb(0xdc2626).into()
+}
+
+/// 错误色深一阶，用于危险主按钮 hover 背景。
+pub fn danger_600() -> Hsla {
+    rgb(0xb91c1c).into()
+}
+
+/// 错误色更深一阶，用于危险主按钮按下背景。
+pub fn danger_700() -> Hsla {
+    rgb(0x991b1b).into()
+}
+
+/// 危险色浅背景，用于危险幽灵按钮 hover 或弱强调背景。
+pub fn danger_50() -> Hsla {
+    rgb(0xfef2f2).into()
 }
 
 /// 警告色，用于警告状态边框和提示。
@@ -129,9 +159,39 @@ pub fn dark_primary() -> Hsla {
     rgb(0x60a5fa).into()
 }
 
+/// 暗色皮肤主按钮背景色。
+pub fn dark_primary_button() -> Hsla {
+    rgb(0x2563eb).into()
+}
+
+/// 暗色皮肤主按钮 hover 背景色。
+pub fn dark_primary_button_hover() -> Hsla {
+    rgb(0x3b82f6).into()
+}
+
+/// 暗色皮肤主按钮按下背景色。
+pub fn dark_primary_button_active() -> Hsla {
+    rgb(0x1d4ed8).into()
+}
+
 /// 暗色皮肤的错误状态颜色。
 pub fn dark_danger() -> Hsla {
     rgb(0xf87171).into()
+}
+
+/// 暗色皮肤危险主按钮背景色。
+pub fn dark_danger_button() -> Hsla {
+    rgb(0xdc2626).into()
+}
+
+/// 暗色皮肤危险主按钮 hover 背景色。
+pub fn dark_danger_button_hover() -> Hsla {
+    rgb(0xef4444).into()
+}
+
+/// 暗色皮肤危险主按钮按下背景色。
+pub fn dark_danger_button_active() -> Hsla {
+    rgb(0xb91c1c).into()
 }
 
 /// 暗色皮肤的警告状态颜色。

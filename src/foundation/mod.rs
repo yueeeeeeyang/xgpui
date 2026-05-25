@@ -17,3 +17,6 @@ pub mod spacing;
 
 /// 组件主题 token。
 pub mod theme;
+
+/// 图标字体安装和标准图标渲染工具。
+pub mod icon;

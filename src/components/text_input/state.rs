@@ -8,6 +8,8 @@ use std::ops::Range;
 use gpui::{SharedString, UTF16Selection};
 use unicode_segmentation::UnicodeSegmentation;
 
+use super::props::TextInputType;
+
 /// 文本编辑后的结果。
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct TextEditOutcome {
@@ -32,17 +34,29 @@ pub struct TextInputState {
     selection_reversed: bool,
     marked_range: Option<Range<usize>>,
     max_length: Option<usize>,
+    input_type: TextInputType,
 }
 
 impl TextInputState {
-    /// 创建新的文本状态。
+    /// 创建新的普通文本测试状态。
+    #[cfg(test)]
     pub fn new(content: impl Into<SharedString>, max_length: Option<usize>) -> Self {
+        Self::new_with_type(content, max_length, TextInputType::Text)
+    }
+
+    /// 创建带指定输入类型的文本状态。
+    pub fn new_with_type(
+        content: impl Into<SharedString>,
+        max_length: Option<usize>,
+        input_type: TextInputType,
+    ) -> Self {
         let mut state = Self {
             content: SharedString::default(),
             selected_range: 0..0,
             selection_reversed: false,
             marked_range: None,
             max_length,
+            input_type,
         };
         state.set_content_silent(content);
         state
@@ -74,7 +88,8 @@ impl TextInputState {
     pub fn set_content_silent(&mut self, content: impl Into<SharedString>) {
         let content = content.into();
         let normalized = normalize_single_line(content.as_str());
-        self.content = self.truncate_to_limit(&normalized).into();
+        let typed = self.normalize_full_content_for_type(&normalized);
+        self.content = self.truncate_to_limit(&typed).into();
         self.selected_range = self.content.len()..self.content.len();
         self.selection_reversed = false;
         self.marked_range = None;
@@ -270,6 +285,9 @@ impl TextInputState {
             inserted_text,
             &self.content[replacement_range.end..]
         );
+        if !self.accepts_content_for_type(&next_content) {
+            return TextEditOutcome::default();
+        }
         self.content = next_content.into();
 
         let inserted_len = inserted_text.len();
@@ -332,6 +350,26 @@ impl TextInputState {
         }
     }
 
+    /// 按输入类型规范化完整文本。
+    ///
+    /// 外部同步值没有“拒绝本次编辑”的上下文，因此数字类型遇到非法完整值时会回退为空字符串，
+    /// 保证状态内部不会保存不符合类型约束的内容。
+    fn normalize_full_content_for_type(&self, text: &str) -> String {
+        match self.input_type {
+            TextInputType::Text | TextInputType::Password => text.to_string(),
+            TextInputType::Number if is_valid_number_text(text) => text.to_string(),
+            TextInputType::Number => String::new(),
+        }
+    }
+
+    /// 判断候选完整文本是否满足当前输入类型。
+    fn accepts_content_for_type(&self, text: &str) -> bool {
+        match self.input_type {
+            TextInputType::Text | TextInputType::Password => true,
+            TextInputType::Number => is_valid_number_text(text),
+        }
+    }
+
     /// 把偏移夹到有效字素簇边界上。
     fn clamp_to_boundary(&self, offset: usize) -> usize {
         if offset >= self.content.len() {
@@ -367,6 +405,35 @@ impl TextInputState {
 /// 把多行文本规范化为单行文本。
 pub fn normalize_single_line(text: &str) -> String {
     text.replace(['\r', '\n'], " ")
+}
+
+/// 判断字符串是否是数字输入允许的中间态。
+///
+/// 该规则故意不把字符串解析成数值，因为用户输入过程中需要保留 `-`、`.`、`-.` 和 `1.`
+/// 这类尚未形成最终数值但在编辑流程中合理的中间内容。
+pub(super) fn is_valid_number_text(text: &str) -> bool {
+    if text.is_empty() {
+        return true;
+    }
+
+    let mut chars = text.chars().peekable();
+    if chars.peek() == Some(&'-') {
+        chars.next();
+    }
+
+    let mut seen_dot = false;
+    for ch in chars {
+        if ch.is_ascii_digit() {
+            continue;
+        }
+        if ch == '.' && !seen_dot {
+            seen_dot = true;
+            continue;
+        }
+        return false;
+    }
+
+    true
 }
 
 /// 在任意字符串中把 UTF-16 偏移转换成 UTF-8 字节偏移。

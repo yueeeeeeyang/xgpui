@@ -2,14 +2,16 @@
 
 `xgpui` 是一个基于 `gpui` 的 Rust 基础 UI 组件库，目标是提供结构清晰、状态可同步、可组合并支持明暗皮肤的桌面 UI 组件。
 
-当前版本处于早期建设阶段，已经提供基础主题能力、单行文本输入组件 `TextInput` 和单选下拉框组件 `Select`。
+当前版本处于早期建设阶段，已经提供基础主题能力、按钮组件 `Button`、单行文本输入组件 `TextInput` 和单选下拉框组件 `Select`。
 
 ## 特性
 
 - 基于 `gpui 0.2.2` 和稳定 Rust 2021 edition。
-- 提供 `xgpui::install(cx)` 统一安装主题状态和默认键盘绑定。
+- 提供 `xgpui::install(cx)` 统一安装主题状态、Lucide 图标字体和默认键盘绑定。
 - 提供亮色、暗色两套基础主题，并可在运行时切换。
-- 提供 `TextInput` 单行输入组件，支持 IME、选区、复制、剪切、粘贴、拖拽选中、清除、只读、禁用、状态样式和前后缀插槽。
+- 内置 Lucide 图标字体，组件内置图标使用成熟图标集而非临时手绘路径。
+- 提供 `Button` 按钮组件，支持主按钮、次级按钮、描边按钮、幽灵按钮、链接按钮、危险色调、尺寸、禁用、加载、块级宽度、前后图标、纯图标按钮和键盘触发。
+- 提供 `TextInput` 单行输入组件，支持普通文本、密码、数字、IME、选区、复制、剪切、粘贴、拖拽选中、清除、只读、禁用、状态样式和前后缀插槽。
 - 提供 `Select` 单选下拉组件，支持本地搜索、键盘导航、锚定下拉面板、清除、禁用、状态样式、helper text、外部同步和明暗皮肤。
 - 通过 `xgpui::prelude::*` 重导出常用组件和配置类型。
 
@@ -33,7 +35,7 @@ gpui = "0.2.2"
 
 ## 初始化
 
-应用启动时需要调用 `xgpui::install(cx)`。该函数会保证主题状态存在，并幂等注册 `TextInput` 和 `Select` 的默认键盘动作。
+应用启动时需要调用 `xgpui::install(cx)`。该函数会保证主题状态存在，安装 Lucide 图标字体，并幂等注册 `TextInput` 和 `Select` 的默认键盘动作。
 
 ```rust
 use gpui::Application;
@@ -60,9 +62,44 @@ set_theme_mode(cx, ThemeMode::Light);
 set_theme_mode(cx, ThemeMode::Dark);
 ```
 
+## Button
+
+`Button` 是基础按钮组件，适合表单提交、工具栏操作和危险操作。组件以 `Entity` 形式创建，内部处理鼠标点击、`Enter` 和 `Space` 键盘触发；`disabled` 和 `loading` 状态不会触发 `on_click`，其中 `loading` 会展示圆圈加载动画。
+
+```rust
+use gpui::{Context, Entity};
+use xgpui::prelude::*;
+
+/// 示例父视图持有按钮实体，便于后续通过公开方法同步 loading 或 disabled 状态。
+struct Toolbar {
+    save: Entity<Button>,
+}
+
+impl Toolbar {
+    /// 创建一个带 Lucide 前置图标的主按钮。
+    fn new(cx: &mut Context<Self>) -> Self {
+        let save = cx.new(|cx| {
+            Button::new(
+                cx,
+                ButtonProps::default()
+                    .label("保存")
+                    .leading_icon(LucideIcon::Save)
+                    .on_click(|| {
+                        // 执行保存动作。
+                    }),
+            )
+        });
+
+        Self { save }
+    }
+}
+```
+
+常用配置包括 `ButtonVariant::{Primary, Secondary, Outline, Ghost, Link}`、`ButtonTone::{Default, Danger}`、`ButtonSize::{Small, Medium, Large}`、`block`、`icon_only`、`leading_icon`、`trailing_icon` 和 `tooltip`。纯图标按钮会隐藏 `label`，但会把 `label` 作为 tooltip 的默认文案。
+
 ## TextInput
 
-`TextInput` 是单行文本输入组件，适合表单、搜索框和设置项。组件内部维护完整编辑状态，同时提供 `set_value`、`clear`、`select_all` 和 `move_to_end` 等公开方法，便于外部同步。
+`TextInput` 是单行文本输入组件，适合表单、密码、金额和设置项。组件内部维护完整编辑状态，同时提供 `set_value`、`clear`、`select_all` 和 `move_to_end` 等公开方法，便于外部同步。
 
 ```rust
 use gpui::{Context, Entity, SharedString};
@@ -87,6 +124,45 @@ impl FormView {
         });
 
         Self { username }
+    }
+}
+```
+
+`TextInputType` 可配置输入类型。密码类型默认显示掩码，并提供眼睛图标切换可见性；数字类型仍保存为字符串，只限制输入形态，不做数值解析或格式化。
+
+```rust
+use gpui::{Context, Entity};
+use xgpui::prelude::*;
+
+/// 示例父视图持有密码和数字输入框实体。
+struct AccountView {
+    password: Entity<TextInput>,
+    amount: Entity<TextInput>,
+}
+
+impl AccountView {
+    /// 创建密码输入框和数字输入框。
+    fn new(cx: &mut Context<Self>) -> Self {
+        let password = cx.new(|cx| {
+            TextInput::new(
+                cx,
+                TextInputProps::default()
+                    .input_type(TextInputType::Password)
+                    .placeholder("请输入密码")
+                    .clearable(true),
+            )
+        });
+
+        let amount = cx.new(|cx| {
+            TextInput::new(
+                cx,
+                TextInputProps::default()
+                    .input_type(TextInputType::Number)
+                    .placeholder("请输入金额"),
+            )
+        });
+
+        Self { password, amount }
     }
 }
 ```
@@ -130,6 +206,12 @@ impl SettingsView {
 
 ## 示例
 
+运行 `Button` 示例：
+
+```bash
+cargo run --example button
+```
+
 运行 `TextInput` 示例：
 
 ```bash
@@ -142,7 +224,7 @@ cargo run --example text_input
 cargo run --example select
 ```
 
-两个示例都包含亮色和暗色皮肤切换，用于验证组件在不同主题下的表现。
+三个示例都包含亮色和暗色皮肤切换，用于验证组件在不同主题下的表现。
 
 ## 文档
 
@@ -168,7 +250,8 @@ cargo check --examples
 
 ## 当前边界
 
-- `TextInput` 目前只实现单行输入，不包含 password、number 或 textarea。
+- `TextInput` 目前只实现单行输入，包含普通文本、密码和数字类型，不包含 email、search 或 textarea。
 - `Select` 目前只实现单选和本地搜索，不包含多选、远程加载、分组选项、虚拟列表或自定义 option 渲染。
+- `Button` 目前实现单按钮能力，不包含按钮组、异步状态管理或任意元素插槽。
 - 项目优先使用稳定 Rust，不引入 nightly 特性。
 - 新增或扩展组件时需要同步支持亮色和暗色皮肤。

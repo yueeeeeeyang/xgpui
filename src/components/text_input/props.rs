@@ -89,6 +89,27 @@ impl Default for TextInputStatus {
     }
 }
 
+/// 输入框内容类型。
+///
+/// 类型用于描述当前输入框的基础输入语义。组件仍然把值保存为字符串，避免数字中间态
+/// 例如 `-`、`.` 或 `1.` 被过早解析成数值后丢失用户正在输入的内容。
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TextInputType {
+    /// 普通单行文本，不做额外字符限制。
+    Text,
+    /// 密码文本，真实值照常保存，渲染时默认显示为掩码字符。
+    Password,
+    /// 数字形态文本，只允许空值、负号、小数点、数字以及它们组成的合法中间态。
+    Number,
+}
+
+impl Default for TextInputType {
+    /// 返回默认输入类型。
+    fn default() -> Self {
+        Self::Text
+    }
+}
+
 /// `TextInput` 前后缀插槽。
 ///
 /// gpui 的 element 通常是一次性构建值，因此插槽保存的是可重复调用的渲染闭包。
@@ -145,6 +166,8 @@ pub struct TextInputProps {
     pub variant: TextInputVariant,
     /// 输入框语义状态。
     pub status: TextInputStatus,
+    /// 输入框内容类型。
+    pub input_type: TextInputType,
     /// 输入框下方辅助文本。
     pub helper_text: Option<SharedString>,
     /// 输入框前缀插槽。
@@ -177,6 +200,7 @@ impl Default for TextInputProps {
             size: TextInputSize::default(),
             variant: TextInputVariant::default(),
             status: TextInputStatus::default(),
+            input_type: TextInputType::default(),
             helper_text: None,
             prefix: None,
             suffix: None,
@@ -247,6 +271,12 @@ impl TextInputProps {
     /// 设置语义状态。
     pub fn status(mut self, status: TextInputStatus) -> Self {
         self.status = status;
+        self
+    }
+
+    /// 设置输入框内容类型。
+    pub fn input_type(mut self, input_type: TextInputType) -> Self {
+        self.input_type = input_type;
         self
     }
 
