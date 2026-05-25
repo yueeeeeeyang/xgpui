@@ -1,0 +1,271 @@
+<!doctype html>
+<!--
+  Textarea 组件静态文档。
+  本页面只维护多行输入的公开 API、行为边界和示例，不参与 Rust crate 运行时代码。
+-->
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Textarea 多行输入组件 - xgpui 使用文档</title>
+    <meta name="description" content="xgpui Textarea 多行输入组件用法、Props、方法和键盘行为说明。" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <!-- 页面主体使用侧边目录和内容区两栏布局，便于快速定位组件 API。 -->
+    <div class="shell">
+      <nav class="sidebar" aria-label="文档目录">
+        <strong>xgpui 文档</strong>
+        <a href="index.html">总览</a>
+        <!-- 组件菜单集中收纳组件页面和当前组件章节，形成稳定的左侧导航树。 -->
+        <details class="nav-group" open>
+          <summary>组件</summary>
+          <div class="nav-tree">
+            <a href="button.html">Button</a>
+            <a href="text_input.html">TextInput</a>
+            <a class="active" href="textarea.html">Textarea</a>
+            <div class="nav-subtree">
+              <a href="#overview">概览</a>
+              <a href="#basic-usage">基础用法</a>
+              <a href="#props">TextareaProps</a>
+              <a href="#methods">公开方法</a>
+              <a href="#keyboard">键盘与输入行为</a>
+            </div>
+            <a href="select.html">Select</a>
+          </div>
+        </details>
+      </nav>
+
+      <main class="content">
+        <!-- Textarea 页面摘要说明当前组件能力和边界。 -->
+        <header class="hero" id="overview">
+          <p class="eyebrow">Component</p>
+          <h1>Textarea 多行输入组件</h1>
+          <p>
+            <code>Textarea</code> 是标准多行文本输入组件，支持换行、软换行、IME、选区、剪贴板、
+            鼠标定位、拖拽选中、内部滚动条、最大长度、只读、禁用、状态样式和 helper text。
+          </p>
+          <div class="meta">
+            <span class="pill">Multiline</span>
+            <span class="pill">IME</span>
+            <span class="pill">Unicode Grapheme</span>
+            <span class="pill">Rows / Max Rows</span>
+            <span class="pill">Light / Dark</span>
+          </div>
+        </header>
+
+        <!-- 基础示例展示最小可用的 Textarea 创建方式。 -->
+        <section class="section" id="basic-usage">
+          <h2>基础用法</h2>
+          <p>
+            <code>Textarea</code> 是 gpui entity 组件，通常在父视图构造函数中通过
+            <code>cx.new</code> 创建，再在 <code>Render</code> 中作为子元素渲染。
+          </p>
+          <div class="code-block">
+            <pre><code class="language-rust">/// 示例父视图，持有一个 Textarea 实体。
+struct FeedbackView {
+    comment: Entity&lt;Textarea&gt;,
+}
+
+impl FeedbackView {
+    /// 创建多行输入框并配置占位文本、最大长度、行数和变化回调。
+    fn new(cx: &mut Context&lt;Self&gt;) -> Self {
+        let comment = cx.new(|cx| {
+            Textarea::new(
+                cx,
+                TextareaProps::default()
+                    .placeholder("请输入反馈内容")
+                    .rows(4)
+                    .max_rows(Some(8))
+                    .max_length(Some(500))
+                    .helper_text(Some(SharedString::from("支持换行、中文输入法和内部滚动")))
+                    .on_change(|value| {
+                        // 在这里同步表单状态或触发上层业务逻辑。
+                        println!("当前内容：{value}");
+                    }),
+            )
+        });
+
+        Self { comment }
+    }
+}</code></pre>
+          </div>
+        </section>
+
+        <!-- Props 表格逐项说明当前公开配置，不描述未实现能力。 -->
+        <section class="section" id="props">
+          <h2>TextareaProps</h2>
+          <p>
+            <code>TextareaProps::default()</code> 提供默认配置，可通过链式方法覆盖需要的属性。
+          </p>
+          <table class="api-table">
+            <thead>
+              <tr>
+                <th>属性</th>
+                <th>类型</th>
+                <th>说明</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>value</code></td>
+                <td><code>SharedString</code></td>
+                <td>初始多行文本。创建后需要外部同步时使用 <code>set_value</code>。</td>
+              </tr>
+              <tr>
+                <td><code>placeholder</code></td>
+                <td><code>SharedString</code></td>
+                <td>空值时显示在首行位置的占位文本。</td>
+              </tr>
+              <tr>
+                <td><code>disabled</code></td>
+                <td><code>bool</code></td>
+                <td>禁用后不能聚焦、选择、复制或编辑。</td>
+              </tr>
+              <tr>
+                <td><code>readonly</code></td>
+                <td><code>bool</code></td>
+                <td>只读后可以聚焦、选择和复制，但不能修改、粘贴、剪切或清除。</td>
+              </tr>
+              <tr>
+                <td><code>required</code></td>
+                <td><code>bool</code></td>
+                <td>显示必填语义标记。当前版本不执行内置校验。</td>
+              </tr>
+              <tr>
+                <td><code>max_length</code></td>
+                <td><code>Option&lt;usize&gt;</code></td>
+                <td>最大长度按 Unicode 字素簇计算，换行、emoji 和组合字符都计入长度。</td>
+              </tr>
+              <tr>
+                <td><code>rows</code> / <code>min_rows</code> / <code>max_rows</code></td>
+                <td><code>usize</code> / <code>Option&lt;usize&gt;</code></td>
+                <td>控制可见行数；超过最大行数后在组件内部滚动。</td>
+              </tr>
+              <tr>
+                <td><code>size</code></td>
+                <td><code>TextareaSize</code></td>
+                <td><code>Small</code>、<code>Medium</code>、<code>Large</code>，影响字号、行高和内边距。</td>
+              </tr>
+              <tr>
+                <td><code>variant</code></td>
+                <td><code>TextareaVariant</code></td>
+                <td><code>Outlined</code>、<code>Filled</code>、<code>Ghost</code>，影响背景和边框展示。</td>
+              </tr>
+              <tr>
+                <td><code>status</code></td>
+                <td><code>TextareaStatus</code></td>
+                <td><code>Default</code>、<code>Error</code>、<code>Warning</code>、<code>Success</code>，只负责语义颜色。</td>
+              </tr>
+              <tr>
+                <td><code>helper_text</code></td>
+                <td><code>Option&lt;SharedString&gt;</code></td>
+                <td>输入框下方辅助文本，颜色会跟随语义状态。</td>
+              </tr>
+              <tr>
+                <td><code>on_submit</code></td>
+                <td><code>FnMut(SharedString)</code></td>
+                <td><code>Cmd+Enter</code> / <code>Ctrl+Enter</code> 触发提交，普通 Enter 仍插入换行。</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <!-- 方法章节列出 Entity 更新时可调用的公开方法。 -->
+        <section class="section" id="methods">
+          <h2>公开方法</h2>
+          <table class="api-table">
+            <thead>
+              <tr>
+                <th>方法</th>
+                <th>用途</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>Textarea::new(cx, props)</code></td>
+                <td>创建组件状态。</td>
+              </tr>
+              <tr>
+                <td><code>value()</code></td>
+                <td>读取当前文本值。</td>
+              </tr>
+              <tr>
+                <td><code>set_value(value, cx)</code></td>
+                <td>从外部同步文本值，不触发 <code>on_change</code>，避免同步回环。</td>
+              </tr>
+              <tr>
+                <td><code>set_disabled(disabled, cx)</code></td>
+                <td>同步禁用状态；禁用会停止光标闪烁和拖选自动滚动。</td>
+              </tr>
+              <tr>
+                <td><code>set_readonly(readonly, cx)</code></td>
+                <td>同步只读状态，不改变当前文本和选区。</td>
+              </tr>
+              <tr>
+                <td><code>set_status(status, cx)</code></td>
+                <td>同步语义状态，只影响视觉样式。</td>
+              </tr>
+              <tr>
+                <td><code>set_helper_text(helper_text, cx)</code></td>
+                <td>同步辅助文本，可设置或清空。</td>
+              </tr>
+              <tr>
+                <td><code>clear(cx)</code></td>
+                <td>清空文本，并在内容变化时触发 <code>on_change</code>。</td>
+              </tr>
+              <tr>
+                <td><code>select_all(cx)</code></td>
+                <td>选中全部文本。</td>
+              </tr>
+              <tr>
+                <td><code>focus_handle()</code></td>
+                <td>返回 gpui 焦点句柄，便于父组件主动聚焦或协调焦点。</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <!-- 行为说明便于使用者理解 Textarea 与 TextInput 的差异和边界。 -->
+        <section class="section" id="keyboard">
+          <h2>键盘与输入行为</h2>
+          <div class="two-col">
+            <div class="mini-card">
+              <h3>文本编辑</h3>
+              <ul>
+                <li><code>Enter</code> 和 <code>Shift+Enter</code> 插入 <code>\n</code>。</li>
+                <li><code>Cmd+Enter</code> / <code>Ctrl+Enter</code> 触发 <code>on_submit</code>，不插入换行。</li>
+                <li>支持 Backspace、Delete、方向键、Home、End、全选、复制、剪切和粘贴。</li>
+              </ul>
+            </div>
+            <div class="mini-card">
+              <h3>选择与滚动</h3>
+              <ul>
+                <li>支持鼠标定位、拖选和 Shift 扩展选择。</li>
+                <li>内容超过最大可见行数后在组件内部滚动。</li>
+                <li>光标移动时会自动调整滚动位置，保持光标可见。</li>
+              </ul>
+            </div>
+            <div class="mini-card">
+              <h3>Unicode 处理</h3>
+              <ul>
+                <li>光标移动和平台替换范围按 Unicode 字素簇边界规范化。</li>
+                <li><code>max_length</code> 按用户可感知字素簇计数。</li>
+                <li>内部包含 UTF-8 和 UTF-16 区间转换，用于平台输入协议。</li>
+              </ul>
+            </div>
+            <div class="mini-card">
+              <h3>状态限制</h3>
+              <ul>
+                <li><code>disabled</code> 禁止聚焦、选择、复制和编辑。</li>
+                <li><code>readonly</code> 允许聚焦、选择和复制，但禁止修改。</li>
+                <li>第一版不支持右下角拖拽 resize、密码/数字类型或前后缀 slot。</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script src="highlight.js"></script>
+  </body>
+</html>

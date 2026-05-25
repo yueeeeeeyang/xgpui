@@ -29,6 +29,7 @@
           <div class="nav-tree">
             <a href="button.html">Button</a>
             <a href="text_input.html">TextInput</a>
+            <a href="textarea.html">Textarea</a>
             <a href="select.html">Select</a>
             <a href="#components">组件总览</a>
           </div>
@@ -42,10 +43,11 @@
           <h1>xgpui 使用文档</h1>
           <p>
             xgpui 是基于 <code>gpui</code> 的 Rust UI 库，当前已提供 <code>Button</code> 按钮组件、
-            完整的单行 <code>TextInput</code> 组件和单选 <code>Select</code> 下拉框组件。组件支持内部状态、
+            完整的单行 <code>TextInput</code> 组件、多行 <code>Textarea</code> 组件和单选 <code>Select</code> 下拉框组件。组件支持内部状态、
             外部同步、常见状态样式和明暗皮肤；<code>Button</code> 支持变体、色调、加载和图标，
             <code>TextInput</code> 额外支持密码、数字、IME、选区、
-            剪贴板和光标闪烁，<code>Select</code> 额外支持本地搜索、锚定下拉面板和键盘导航。
+            剪贴板和光标闪烁，<code>Textarea</code> 额外支持换行、软换行、行数控制和内部滚动，
+            <code>Select</code> 额外支持本地搜索、锚定下拉面板和键盘导航。
           </p>
           <div class="meta">
             <span class="pill">Rust 2021</span>
@@ -54,6 +56,7 @@
             <span class="pill">Lucide Icons</span>
             <span class="pill">Button</span>
             <span class="pill">单行 TextInput</span>
+            <span class="pill">多行 Textarea</span>
             <span class="pill">单选 Select</span>
             <span class="pill">Light / Dark</span>
           </div>
@@ -79,7 +82,7 @@ Application::new().run(|cx: &mut App| {
           </div>
           <p class="note">
             必须调用 <code>xgpui::install(cx)</code>，否则退格、删除、方向键、全选、复制、
-            剪切和粘贴等默认动作不会由 <code>TextInput</code> 接收，Enter、Space、Escape、
+            剪切和粘贴等默认动作不会由 <code>TextInput</code> / <code>Textarea</code> 接收，Enter、Space、Escape、
             方向键、Home 和 End 等默认动作也不会由 <code>Select</code> 接收。该函数是幂等的，
             重复调用不会重复注册默认快捷键。
           </p>
@@ -113,19 +116,22 @@ let current = xgpui::theme_mode(cx);</code></pre>
         <section class="section" id="run-example">
           <h2>运行示例</h2>
           <p>
-            项目内置了 <code>examples/button.rs</code>、<code>examples/text_input.rs</code> 和
+            项目内置了 <code>examples/button.rs</code>、<code>examples/text_input.rs</code>、
+            <code>examples/textarea.rs</code> 和
             <code>examples/select.rs</code>，
             可直接运行查看组件效果。
           </p>
           <div class="code-block">
             <pre><code class="language-bash">cargo run --example button
 cargo run --example text_input
+cargo run --example textarea
 cargo run --example select</code></pre>
           </div>
           <p>
             <code>button</code> 示例覆盖变体、危险色调、尺寸、禁用、加载、块级按钮、图标和明暗皮肤；
             <code>text_input</code> 示例覆盖基础输入、密码输入、数字输入、禁用、只读、错误态、helper text、clearable、
-            前后缀插槽和 <code>set_value</code> 外部同步；<code>select</code> 示例覆盖基础选择、
+            前后缀插槽和 <code>set_value</code> 外部同步；<code>textarea</code> 示例覆盖基础多行输入、
+            最大长度、行数控制、只读、禁用、错误态和 <code>set_value</code> 外部同步；<code>select</code> 示例覆盖基础选择、
             搜索、禁用、错误态、clearable、空结果、外部同步和明暗皮肤。
           </p>
         </section>
@@ -146,6 +152,11 @@ cargo run --example select</code></pre>
               <p><a href="text_input.html">查看 TextInput 文档</a></p>
             </div>
             <div class="mini-card">
+              <h3>Textarea</h3>
+            <p>多行输入组件，覆盖换行、软换行、IME、选区、剪贴板、行数控制和内部滚动条。</p>
+              <p><a href="textarea.html">查看 Textarea 文档</a></p>
+            </div>
+            <div class="mini-card">
               <h3>Select</h3>
               <p>单选下拉组件，覆盖本地搜索、键盘导航、锚定下拉面板、清除和外部同步。</p>
               <p><a href="select.html">查看 Select 文档</a></p>
@@ -158,15 +169,16 @@ cargo run --example select</code></pre>
           <h2>实现约束</h2>
           <ul>
             <li><code>Button</code> 第一版支持常用单按钮能力，不包含按钮组、异步状态管理或任意元素插槽。</li>
-            <li>当前版本只实现单行 <code>TextInput</code>，包含普通文本、密码和数字类型，不包含 email、search 或 textarea。</li>
-            <li>当前版本只实现单选 <code>Select</code>，不包含多选、远程加载、分组、虚拟列表或自定义 option 渲染。</li>
+            <li>当前版本只实现单行 <code>TextInput</code>，包含普通文本、密码和数字类型，不包含 email 或 search。</li>
+            <li><code>Textarea</code> 第一版支持标准多行输入，不包含右下角拖拽 resize、密码/数字类型或前后缀 slot。</li>
+            <li>当前版本只实现单选 <code>Select</code>，不包含多选、远程加载、分组或自定义 option 渲染。</li>
             <li>项目优先使用稳定 Rust，不引入 nightly 特性。</li>
             <li>新功能应按模块、类型和职责拆分，避免把组件逻辑堆在单个文件或单个方法中。</li>
             <li>公共 API、组件行为、状态流转和边界条件应通过中文注释说明设计意图。</li>
             <li>所有新增或扩展组件都需要同步实现明暗皮肤，并通过 <code>foundation::theme</code> 解析颜色 token。</li>
           </ul>
           <p class="note warning">
-            如果需要新增按钮组、按钮任意元素插槽、表单校验、多行文本、多选 Select 或远程搜索，
+            如果需要新增按钮组、按钮任意元素插槽、表单校验、Textarea resize、多选 Select 或远程搜索，
             请先补充交互需求和 API 预期，
             再扩展组件层次和状态模型。
           </p>

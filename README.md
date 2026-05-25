@@ -2,7 +2,7 @@
 
 `xgpui` 是一个基于 `gpui` 的 Rust 基础 UI 组件库，目标是提供结构清晰、状态可同步、可组合并支持明暗皮肤的桌面 UI 组件。
 
-当前版本处于早期建设阶段，已经提供基础主题能力、按钮组件 `Button`、单行文本输入组件 `TextInput` 和单选下拉框组件 `Select`。
+当前版本处于早期建设阶段，已经提供基础主题能力、按钮组件 `Button`、单行文本输入组件 `TextInput`、多行文本输入组件 `Textarea` 和单选下拉框组件 `Select`。
 
 ## 特性
 
@@ -12,6 +12,7 @@
 - 内置 Lucide 图标字体，组件内置图标使用成熟图标集而非临时手绘路径。
 - 提供 `Button` 按钮组件，支持主按钮、次级按钮、描边按钮、幽灵按钮、链接按钮、危险色调、尺寸、禁用、加载、块级宽度、前后图标、纯图标按钮和键盘触发。
 - 提供 `TextInput` 单行输入组件，支持普通文本、密码、数字、IME、选区、复制、剪切、粘贴、拖拽选中、清除、只读、禁用、状态样式和前后缀插槽。
+- 提供 `Textarea` 多行输入组件，支持换行、软换行、IME、选区、复制、剪切、粘贴、拖拽选中、只读、禁用、最大长度、行数控制、内部滚动条、状态样式和 helper text。
 - 提供 `Select` 单选下拉组件，支持本地搜索、键盘导航、锚定下拉面板、清除、禁用、状态样式、helper text、外部同步和明暗皮肤。
 - 通过 `xgpui::prelude::*` 重导出常用组件和配置类型。
 
@@ -35,7 +36,7 @@ gpui = "0.2.2"
 
 ## 初始化
 
-应用启动时需要调用 `xgpui::install(cx)`。该函数会保证主题状态存在，安装 Lucide 图标字体，并幂等注册 `TextInput` 和 `Select` 的默认键盘动作。
+应用启动时需要调用 `xgpui::install(cx)`。该函数会保证主题状态存在，安装 Lucide 图标字体，并幂等注册 `TextInput`、`Textarea` 和 `Select` 的默认键盘动作。
 
 ```rust
 use gpui::Application;
@@ -167,6 +168,41 @@ impl AccountView {
 }
 ```
 
+## Textarea
+
+`Textarea` 是标准多行文本输入组件，适合备注、描述、正文片段和需要保留换行的表单字段。组件内部维护多行编辑状态，同时提供 `set_value`、`set_disabled`、`set_readonly`、`set_status`、`set_helper_text`、`clear` 和 `select_all` 等公开方法，便于父组件做受控同步。
+
+```rust
+use gpui::{Context, Entity, SharedString};
+use xgpui::prelude::*;
+
+/// 示例父视图持有 textarea 实体，便于在事件中同步状态。
+struct FeedbackView {
+    comment: Entity<Textarea>,
+}
+
+impl FeedbackView {
+    /// 创建一个带最大长度和 helper text 的多行输入框。
+    fn new(cx: &mut Context<Self>) -> Self {
+        let comment = cx.new(|cx| {
+            Textarea::new(
+                cx,
+                TextareaProps::default()
+                    .placeholder("请输入反馈内容")
+                    .rows(4)
+                    .max_rows(Some(8))
+                    .max_length(Some(500))
+                    .helper_text(Some(SharedString::from("支持换行、中文输入法和内部滚动"))),
+            )
+        });
+
+        Self { comment }
+    }
+}
+```
+
+`Enter` 和 `Shift+Enter` 会插入换行；`Cmd+Enter` / `Ctrl+Enter` 触发 `on_submit`，不插入换行。`max_length` 按 Unicode 字素簇计数，emoji、组合字符和换行都按用户可感知字符处理。
+
 ## Select
 
 `Select` 是单选下拉框组件，适合在有限选项中选择一个值。第一版只支持单选和本地文本搜索，不包含多选、远程加载、分组选项或自定义 option 渲染。
@@ -218,6 +254,12 @@ cargo run --example button
 cargo run --example text_input
 ```
 
+运行 `Textarea` 示例：
+
+```bash
+cargo run --example textarea
+```
+
 运行 `Select` 示例：
 
 ```bash
@@ -234,6 +276,7 @@ cargo run --example select
 docs/index.html
 docs/button.html
 docs/text_input.html
+docs/textarea.html
 docs/select.html
 ```
 
@@ -253,8 +296,9 @@ cargo check --examples
 
 ## 当前边界
 
-- `TextInput` 目前只实现单行输入，包含普通文本、密码和数字类型，不包含 email、search 或 textarea。
-- `Select` 目前只实现单选和本地搜索，不包含多选、远程加载、分组选项、虚拟列表或自定义 option 渲染。
+- `TextInput` 目前只实现单行输入，包含普通文本、密码和数字类型，不包含 email 或 search。
+- `Textarea` 目前实现标准多行文本输入，不包含右下角拖拽 resize、密码/数字类型或前后缀 slot。
+- `Select` 目前只实现单选和本地搜索，不包含多选、远程加载、分组选项或自定义 option 渲染。
 - `Button` 目前实现单按钮能力，不包含按钮组、异步状态管理或任意元素插槽。
 - 项目优先使用稳定 Rust，不引入 nightly 特性。
 - 新增或扩展组件时需要同步支持亮色和暗色皮肤。

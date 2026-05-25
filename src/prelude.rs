@@ -11,5 +11,8 @@ pub use crate::components::text_input::{
     TextInput, TextInputProps, TextInputSize, TextInputSlot, TextInputStatus, TextInputType,
     TextInputVariant,
 };
+pub use crate::components::textarea::{
+    Textarea, TextareaProps, TextareaSize, TextareaStatus, TextareaVariant,
+};
 pub use crate::foundation::icon::LucideIcon;
 pub use crate::{set_theme_mode, theme_mode, ThemeMode};
