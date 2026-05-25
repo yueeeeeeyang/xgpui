@@ -9,3 +9,7 @@ license = "Apache-2.0"
 gpui = "0.2.2"
 lucide-icons = "1.14"
 unicode-segmentation = "1"
+
+[dev-dependencies]
+# 仅在测试目标中启用 gpui 的测试上下文，用于覆盖 Entity 组件公开同步方法。
+gpui = { version = "0.2.2", features = ["test-support"] }

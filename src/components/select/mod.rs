@@ -86,9 +86,10 @@ pub fn register_select_key_bindings(cx: &mut App) {
 
 /// 单选下拉框组件。
 ///
-/// 组件内部维护打开状态、搜索词、当前值和高亮项，同时通过 `on_change`、`set_value`
-/// 支持外部受控同步。调用方通常使用 `cx.new(|cx| Select::new(cx, props))` 创建实体，
-/// 再把实体作为子元素渲染。
+/// 组件内部维护打开状态、搜索词、当前值和高亮项，同时通过 `set_value`、`set_options`、
+/// `set_disabled`、`set_status` 和 `set_helper_text` 支持外部受控同步。受控同步默认不触发
+/// 用户交互回调，避免父组件写回状态时形成回调循环。调用方通常使用
+/// `cx.new(|cx| Select::new(cx, props))` 创建实体，再把实体作为子元素渲染。
 pub struct Select {
     focus_handle: FocusHandle,
     state: SelectState,
@@ -209,6 +210,76 @@ impl Select {
         self.apply_outcome(outcome, false, cx);
     }
 
+    /// 从外部同步选项列表。
+    ///
+    /// 该方法会保留当前选中值，即使新选项列表中暂时找不到该值也不会静默清空。这样父组件可以先同步
+    /// 远端选项，再按自身业务规则决定是否调用 `set_value(None, cx)`。选项更新只会重新计算高亮项并刷新
+    /// 展示，不会触发 `on_change`、`on_open_change` 或 `on_search_change`。
+    pub fn set_options(&mut self, options: impl Into<Vec<SelectOption>>, cx: &mut Context<Self>) {
+        let options = options.into();
+        if self.options == options {
+            return;
+        }
+
+        self.cancel_outside_close();
+        self.options = options;
+        let outcome = self.state.sync_options_silent(&self.options);
+        if outcome.should_notify() {
+            self.apply_outcome(outcome, false, cx);
+        } else {
+            // 选中值、高亮和搜索词都可能保持不变，但 label、禁用项或未来打开时的候选列表已经变化；
+            // 因此即便状态层没有派生变化，也必须通知 gpui 重绘当前触发器或下拉面板。
+            cx.notify();
+        }
+    }
+
+    /// 从外部同步禁用状态。
+    ///
+    /// 禁用属于父组件受控输入，不表达用户主动关闭语义；因此禁用时会静默关闭面板并清理搜索交互状态，
+    /// 但不会触发 `on_open_change`。重新启用只恢复可交互能力，不会自动打开下拉面板。
+    pub fn set_disabled(&mut self, disabled: bool, cx: &mut Context<Self>) {
+        if self.disabled == disabled {
+            return;
+        }
+
+        self.cancel_outside_close();
+        self.disabled = disabled;
+        if disabled {
+            let _ = self.state.close();
+            self.stop_search_interaction();
+        }
+        cx.notify();
+    }
+
+    /// 从外部同步语义状态。
+    ///
+    /// 状态只影响视觉样式，不改变当前值、搜索词、打开状态或任何交互回调。
+    pub fn set_status(&mut self, status: SelectStatus, cx: &mut Context<Self>) {
+        if self.status == status {
+            return;
+        }
+
+        self.status = status;
+        cx.notify();
+    }
+
+    /// 从外部同步辅助文本。
+    ///
+    /// helper text 是纯展示输入，设置或清空时只刷新渲染，不影响选择值和下拉交互状态。
+    pub fn set_helper_text(
+        &mut self,
+        helper_text: impl Into<Option<SharedString>>,
+        cx: &mut Context<Self>,
+    ) {
+        let helper_text = helper_text.into();
+        if self.helper_text == helper_text {
+            return;
+        }
+
+        self.helper_text = helper_text;
+        cx.notify();
+    }
+
     /// 清空当前选择并触发变化回调。
     pub fn clear(&mut self, cx: &mut Context<Self>) {
         if self.disabled {
@@ -293,13 +364,21 @@ impl Select {
             self.restart_search_cursor_blink(cx);
         }
         if outcome.open_changed && !self.state.is_open() {
-            self.stop_search_cursor_blink();
-            self.is_search_selecting = false;
-            self.search_auto_scroll_direction = None;
+            self.stop_search_interaction();
         }
         if outcome.should_notify() {
             cx.notify();
         }
+    }
+
+    /// 停止搜索输入相关的临时交互状态。
+    ///
+    /// 关闭下拉或禁用组件后，搜索光标闪烁、拖拽选区和自动滚动都不能继续影响组件状态。
+    /// 异步自动滚动任务如果已经排队，下一帧会看到方向为空并自然退出。
+    fn stop_search_interaction(&mut self) {
+        self.stop_search_cursor_blink();
+        self.is_search_selecting = false;
+        self.search_auto_scroll_direction = None;
     }
 
     /// 触发选中值变化回调。

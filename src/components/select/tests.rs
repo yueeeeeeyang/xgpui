@@ -1,12 +1,16 @@
-//! `Select` 纯状态测试。
+//! `Select` 状态与受控同步测试。
 //!
-//! 这些测试聚焦选择、清除、搜索过滤和键盘高亮核心逻辑，不启动 gpui 窗口，从而保持测试稳定。
+//! 大多数测试聚焦选择、清除、搜索过滤和键盘高亮的纯状态逻辑；少量测试使用 gpui 测试上下文
+//! 覆盖公开 Entity 方法，但不启动真实窗口，从而保持测试稳定和快速。
 
-use gpui::SharedString;
+use std::{cell::Cell, rc::Rc};
+
+use gpui::{AppContext, SharedString, TestAppContext};
 
 use super::{
-    props::SelectOption,
+    props::{SelectOption, SelectProps, SelectStatus},
     state::{filtered_indices_for, SelectState},
+    Select,
 };
 
 /// 构造测试选项列表。
@@ -47,6 +51,61 @@ fn set_value_silent_updates_value_without_interaction_semantics() {
         state.selected_label(&options),
         Some(SharedString::from("Orange"))
     );
+}
+
+/// 外部同步选项应保留当前值，并允许展示文案随新选项刷新。
+#[test]
+fn sync_options_keeps_value_and_refreshes_selected_label() {
+    let options = options();
+    let mut state = SelectState::new(Some(SharedString::from("apple")), &options);
+    let renamed_options = vec![
+        SelectOption::new("apple", "Apple Updated"),
+        SelectOption::new("orange", "Orange"),
+    ];
+
+    let outcome = state.sync_options_silent(&renamed_options);
+
+    assert!(!outcome.value_changed);
+    assert_eq!(state.value(), Some(&SharedString::from("apple")));
+    assert_eq!(
+        state.selected_label(&renamed_options),
+        Some(SharedString::from("Apple Updated"))
+    );
+}
+
+/// 新选项缺少当前值时也不能静默清空，清空决策应由父组件显式同步。
+#[test]
+fn sync_options_preserves_missing_value() {
+    let options = options();
+    let mut state = SelectState::new(Some(SharedString::from("apple")), &options);
+    let remote_options = vec![SelectOption::new("coffee", "Coffee")];
+
+    let outcome = state.sync_options_silent(&remote_options);
+
+    assert!(!outcome.value_changed);
+    assert_eq!(state.value(), Some(&SharedString::from("apple")));
+    assert_eq!(state.selected_label(&remote_options), None);
+    assert_eq!(state.highlighted_index(), Some(0));
+}
+
+/// 下拉打开并带有搜索词时，选项同步应按当前搜索结果重新选择可高亮项。
+#[test]
+fn sync_options_recomputes_highlight_with_current_search() {
+    let options = options();
+    let mut state = SelectState::new(None, &options);
+    state.open(&options);
+    state.set_search("ap", &options);
+    let remote_options = vec![
+        SelectOption::new("disabled", "Apricot disabled").disabled(true),
+        SelectOption::new("apricot", "Apricot"),
+        SelectOption::new("orange", "Orange"),
+    ];
+
+    let outcome = state.sync_options_silent(&remote_options);
+
+    assert!(outcome.highlight_changed);
+    assert_eq!(state.filtered_indices(&remote_options), vec![0, 1]);
+    assert_eq!(state.highlighted_index(), Some(1));
 }
 
 /// 清除应移除当前值并把高亮恢复到第一个可选项。
@@ -236,4 +295,134 @@ fn duplicate_values_use_first_match_for_display() {
         state.selected_label(&options),
         Some(SharedString::from("First"))
     );
+}
+
+/// 公开 set_options 方法应更新选项展示但不触发任何用户交互回调。
+#[gpui::test]
+fn set_options_updates_entity_without_emitting_callbacks(cx: &mut TestAppContext) {
+    let value_changes = Rc::new(Cell::new(0));
+    let open_changes = Rc::new(Cell::new(0));
+    let search_changes = Rc::new(Cell::new(0));
+    let value_changes_for_callback = value_changes.clone();
+    let open_changes_for_callback = open_changes.clone();
+    let search_changes_for_callback = search_changes.clone();
+    let select = cx.new(|cx| {
+        Select::new(
+            cx,
+            SelectProps::default()
+                .value(Some(SharedString::from("apple")))
+                .options(options())
+                .on_change(move |_| {
+                    value_changes_for_callback.set(value_changes_for_callback.get() + 1);
+                })
+                .on_open_change(move |_| {
+                    open_changes_for_callback.set(open_changes_for_callback.get() + 1);
+                })
+                .on_search_change(move |_| {
+                    search_changes_for_callback.set(search_changes_for_callback.get() + 1);
+                }),
+        )
+    });
+
+    select.update(cx, |select, cx| {
+        select.set_options(vec![SelectOption::new("apple", "Apple Updated")], cx);
+        assert_eq!(select.value(), Some(&SharedString::from("apple")));
+        assert_eq!(
+            select.selected_label(),
+            Some(SharedString::from("Apple Updated"))
+        );
+
+        select.set_options(vec![SelectOption::new("coffee", "Coffee")], cx);
+        assert_eq!(select.value(), Some(&SharedString::from("apple")));
+        assert_eq!(select.selected_label(), None);
+    });
+
+    assert_eq!(value_changes.get(), 0);
+    assert_eq!(open_changes.get(), 0);
+    assert_eq!(search_changes.get(), 0);
+}
+
+/// 公开 set_disabled 方法应静默关闭并阻止禁用期间的打开、切换和清空。
+#[gpui::test]
+fn set_disabled_closes_silently_and_blocks_interactions(cx: &mut TestAppContext) {
+    let open_changes = Rc::new(Cell::new(0));
+    let open_changes_for_callback = open_changes.clone();
+    let select = cx.new(|cx| {
+        Select::new(
+            cx,
+            SelectProps::default()
+                .value(Some(SharedString::from("orange")))
+                .options(options())
+                .clearable(true)
+                .on_open_change(move |_| {
+                    open_changes_for_callback.set(open_changes_for_callback.get() + 1);
+                }),
+        )
+    });
+
+    select.update(cx, |select, cx| {
+        select.open(cx);
+        assert!(select.state.is_open());
+
+        select.set_disabled(true, cx);
+        assert!(select.disabled);
+        assert!(!select.state.is_open());
+        assert!(!select.is_search_selecting);
+        assert!(select.search_auto_scroll_direction.is_none());
+
+        select.open(cx);
+        select.toggle(cx);
+        select.clear(cx);
+        assert!(!select.state.is_open());
+        assert_eq!(select.value(), Some(&SharedString::from("orange")));
+
+        select.set_disabled(false, cx);
+        select.open(cx);
+        assert!(!select.disabled);
+        assert!(select.state.is_open());
+    });
+
+    assert_eq!(open_changes.get(), 2);
+}
+
+/// 语义状态和辅助文本同步只影响展示输入，不改变选择、搜索或打开状态。
+#[gpui::test]
+fn set_status_and_helper_text_only_update_visual_inputs(cx: &mut TestAppContext) {
+    let select = cx.new(|cx| {
+        Select::new(
+            cx,
+            SelectProps::default()
+                .value(Some(SharedString::from("apple")))
+                .options(options()),
+        )
+    });
+
+    select.update(cx, |select, cx| {
+        select.open(cx);
+        select.state.set_search("ap", &select.options);
+        let before_value = select.value().cloned();
+        let before_open = select.state.is_open();
+        let before_search = select.state.search().clone();
+
+        select.set_status(SelectStatus::Error, cx);
+        assert_eq!(select.status, SelectStatus::Error);
+        assert_eq!(select.value().cloned(), before_value);
+        assert_eq!(select.state.is_open(), before_open);
+        assert_eq!(select.state.search(), &before_search);
+
+        select.set_helper_text(Some(SharedString::from("支付方式不能为空")), cx);
+        assert_eq!(
+            select.helper_text,
+            Some(SharedString::from("支付方式不能为空"))
+        );
+        assert_eq!(select.value().cloned(), before_value);
+        assert_eq!(select.state.is_open(), before_open);
+        assert_eq!(select.state.search(), &before_search);
+
+        select.set_helper_text(None::<SharedString>, cx);
+        assert!(select.helper_text.is_none());
+        assert_eq!(select.value().cloned(), before_value);
+        assert_eq!(select.state.is_open(), before_open);
+        assert_eq!(select.state.search(), &before_search);
+    });
 }

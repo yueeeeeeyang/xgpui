@@ -159,6 +159,18 @@ impl SelectState {
         }
     }
 
+    /// 根据新的选项列表静默同步派生状态。
+    ///
+    /// 该方法只重新计算高亮项，不会清空或改写当前 `value`。父组件更新远端选项时，当前值可能暂时
+    /// 不存在于新列表中；状态层保留该值，让调用方可以显式决定是否再调用 `set_value_silent(None, ...)`。
+    pub fn sync_options_silent(&mut self, options: &[SelectOption]) -> SelectStateOutcome {
+        let highlight_changed = self.sync_highlight_to_preferred(options);
+        SelectStateOutcome {
+            highlight_changed,
+            ..SelectStateOutcome::default()
+        }
+    }
+
     /// 打开下拉面板。
     ///
     /// 打开时会清空搜索词并把高亮移动到当前选中项或第一个可选项，保证键盘导航从可预期位置开始。
