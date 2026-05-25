@@ -1,0 +1,217 @@
+<!doctype html>
+<!--
+  Tree 组件静态文档。
+  本页面只维护树组件的公开 API、行为边界和示例，不参与 Rust crate 运行时代码。
+-->
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tree 标准树组件 - xgpui 使用文档</title>
+    <meta name="description" content="xgpui Tree 标准树组件用法、Props、方法和键盘行为说明。" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <nav class="sidebar" aria-label="文档目录">
+        <strong>xgpui 文档</strong>
+        <a href="index.html">总览</a>
+        <details class="nav-group" open>
+          <summary>组件</summary>
+          <div class="nav-tree">
+            <a href="button.html">Button</a>
+            <a href="text_input.html">TextInput</a>
+            <a href="textarea.html">Textarea</a>
+            <a href="select.html">Select</a>
+            <a class="active" href="tree.html">Tree</a>
+            <div class="nav-subtree">
+              <a href="#overview">概览</a>
+              <a href="#basic-usage">基础用法</a>
+              <a href="#props">TreeProps</a>
+              <a href="#methods">公开方法</a>
+              <a href="#keyboard">键盘行为</a>
+            </div>
+          </div>
+        </details>
+      </nav>
+
+      <main class="content">
+        <header class="hero" id="overview">
+          <p class="eyebrow">Component</p>
+          <h1>Tree 标准树组件</h1>
+          <p>
+            <code>Tree</code> 支持嵌套节点、展开折叠、单选/多选、级联复选半选、过滤、
+            键盘导航、虚拟列表、禁用、状态样式、helper text、受控同步和明暗皮肤。
+          </p>
+          <div class="meta">
+            <span class="pill">Nested Nodes</span>
+            <span class="pill">Cascade Check</span>
+            <span class="pill">Virtual List</span>
+            <span class="pill">Keyboard</span>
+            <span class="pill">Light / Dark</span>
+          </div>
+        </header>
+
+        <section class="section" id="basic-usage">
+          <h2>基础用法</h2>
+          <p>
+            <code>Tree</code> 是 gpui entity 组件，通常在父视图构造函数中通过
+            <code>cx.new</code> 创建，再在 <code>Render</code> 中作为子元素渲染。
+          </p>
+          <div class="code-block">
+            <pre><code class="language-rust">struct PermissionView {
+    tree: Entity&lt;Tree&gt;,
+}
+
+impl PermissionView {
+    fn new(cx: &mut Context&lt;Self&gt;) -> Self {
+        let tree = cx.new(|cx| {
+            Tree::new(
+                cx,
+                TreeProps::default()
+                    .nodes(vec![TreeNode::new("admin", "后台管理").children(vec![
+                        TreeNode::new("user.read", "查看用户"),
+                        TreeNode::new("user.write", "编辑用户"),
+                    ])])
+                    .expanded_keys(vec![SharedString::from("admin")])
+                    .checkable(true)
+                    .helper_text(Some(SharedString::from("父子节点会自动计算 checked 和半选状态"))),
+            )
+        });
+
+        Self { tree }
+    }
+}</code></pre>
+          </div>
+        </section>
+
+        <section class="section" id="props">
+          <h2>TreeProps</h2>
+          <table class="api-table">
+            <thead>
+              <tr>
+                <th>属性</th>
+                <th>类型</th>
+                <th>说明</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>nodes</code></td>
+                <td><code>Vec&lt;TreeNode&gt;</code></td>
+                <td>嵌套节点树。节点 <code>key</code> 要求唯一；重复 key 会保留第一次出现的节点。</td>
+              </tr>
+              <tr>
+                <td><code>expanded_keys</code></td>
+                <td><code>Vec&lt;SharedString&gt;</code></td>
+                <td>初始展开节点 key。只有有子节点的 key 会影响可见行。</td>
+              </tr>
+              <tr>
+                <td><code>selected_keys</code></td>
+                <td><code>Vec&lt;SharedString&gt;</code></td>
+                <td>初始行选中 key，语义由 <code>selection_mode</code> 决定。</td>
+              </tr>
+              <tr>
+                <td><code>checked_keys</code></td>
+                <td><code>Vec&lt;SharedString&gt;</code></td>
+                <td>初始 checked key，会按级联规则规范化并派生半选节点。</td>
+              </tr>
+              <tr>
+                <td><code>filter_text</code></td>
+                <td><code>SharedString</code></td>
+                <td>过滤文本，按 label 大小写不敏感匹配，并显示匹配节点的祖先路径。</td>
+              </tr>
+              <tr>
+                <td><code>selection_mode</code></td>
+                <td><code>TreeSelectionMode</code></td>
+                <td><code>None</code>、<code>Single</code>、<code>Multiple</code>。</td>
+              </tr>
+              <tr>
+                <td><code>checkable</code></td>
+                <td><code>bool</code></td>
+                <td>是否显示复选框并启用 checked 状态。</td>
+              </tr>
+              <tr>
+                <td><code>disabled</code> / <code>required</code></td>
+                <td><code>bool</code></td>
+                <td>禁用状态和必填语义标记。</td>
+              </tr>
+              <tr>
+                <td><code>size</code> / <code>variant</code> / <code>status</code></td>
+                <td><code>TreeSize</code> / <code>TreeVariant</code> / <code>TreeStatus</code></td>
+                <td>控制行高、容器样式和语义状态色。</td>
+              </tr>
+              <tr>
+                <td><code>helper_text</code> / <code>empty_text</code></td>
+                <td><code>Option&lt;SharedString&gt;</code> / <code>SharedString</code></td>
+                <td>辅助文本和空状态文本。</td>
+              </tr>
+              <tr>
+                <td><code>max_height</code></td>
+                <td><code>Pixels</code></td>
+                <td>虚拟列表最大视口高度，超过后内部滚动。</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section class="section" id="methods">
+          <h2>公开方法</h2>
+          <table class="api-table">
+            <tbody>
+              <tr>
+                <td><code>Tree::new(cx, props)</code></td>
+                <td>创建 Tree 组件。</td>
+              </tr>
+              <tr>
+                <td><code>expanded_keys()</code> / <code>selected_keys()</code> / <code>checked_keys()</code></td>
+                <td>读取当前展开、选中和 checked key。</td>
+              </tr>
+              <tr>
+                <td><code>half_checked_keys()</code></td>
+                <td>读取当前半选 key，按当前节点树 DFS 顺序返回。</td>
+              </tr>
+              <tr>
+                <td><code>set_nodes(...)</code></td>
+                <td>从外部同步节点树，保留已有状态 key，不触发交互回调。</td>
+              </tr>
+              <tr>
+                <td><code>set_expanded_keys(...)</code> / <code>set_selected_keys(...)</code> / <code>set_checked_keys(...)</code></td>
+                <td>受控同步对应状态，不触发外部回调。</td>
+              </tr>
+              <tr>
+                <td><code>set_filter_text(...)</code> / <code>set_disabled(...)</code> / <code>set_status(...)</code> / <code>set_helper_text(...)</code></td>
+                <td>同步过滤、禁用、语义状态和辅助文本。</td>
+              </tr>
+              <tr>
+                <td><code>clear_selection(cx)</code> / <code>clear_checked(cx)</code></td>
+                <td>清空 selected 或 checked 状态，并按交互语义触发对应回调。</td>
+              </tr>
+              <tr>
+                <td><code>focus_handle()</code></td>
+                <td>返回焦点句柄，便于父组件主动聚焦。</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section class="section" id="keyboard">
+          <h2>键盘行为</h2>
+          <ul>
+            <li><code>Up</code> / <code>Down</code> 移动活动行。</li>
+            <li><code>Home</code> / <code>End</code> 移动到首个或最后一个可见节点。</li>
+            <li><code>Left</code> 折叠当前节点；已折叠或叶子节点时移动到父节点。</li>
+            <li><code>Right</code> 展开当前节点；已展开时移动到第一个可见子节点。</li>
+            <li><code>Enter</code> 执行行选中。</li>
+            <li><code>Space</code> 优先切换复选框；未开启复选时执行行选中。</li>
+            <li><code>Cmd+A</code> / <code>Ctrl+A</code> 在多选模式下选中所有可见可选节点。</li>
+          </ul>
+          <p class="note warning">
+            第一版不包含拖拽排序、异步加载、远程搜索、自定义节点渲染、右键菜单或节点编辑。
+          </p>
+        </section>
+      </main>
+    </div>
+    <script src="highlight.js"></script>
+  </body>
+</html>

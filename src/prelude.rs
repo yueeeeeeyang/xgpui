@@ -14,5 +14,8 @@ pub use crate::components::text_input::{
 pub use crate::components::textarea::{
     Textarea, TextareaProps, TextareaSize, TextareaStatus, TextareaVariant,
 };
+pub use crate::components::tree::{
+    Tree, TreeCheckState, TreeNode, TreeProps, TreeSelectionMode, TreeSize, TreeStatus, TreeVariant,
+};
 pub use crate::foundation::icon::LucideIcon;
 pub use crate::{set_theme_mode, theme_mode, ThemeMode};

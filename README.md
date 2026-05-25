@@ -2,7 +2,7 @@
 
 `xgpui` 是一个基于 `gpui` 的 Rust 基础 UI 组件库，目标是提供结构清晰、状态可同步、可组合并支持明暗皮肤的桌面 UI 组件。
 
-当前版本处于早期建设阶段，已经提供基础主题能力、按钮组件 `Button`、单行文本输入组件 `TextInput`、多行文本输入组件 `Textarea` 和单选下拉框组件 `Select`。
+当前版本处于早期建设阶段，已经提供基础主题能力、按钮组件 `Button`、单行文本输入组件 `TextInput`、多行文本输入组件 `Textarea`、单选下拉框组件 `Select` 和标准树组件 `Tree`。
 
 ## 特性
 
@@ -14,6 +14,7 @@
 - 提供 `TextInput` 单行输入组件，支持普通文本、密码、数字、IME、选区、复制、剪切、粘贴、拖拽选中、清除、只读、禁用、状态样式和前后缀插槽。
 - 提供 `Textarea` 多行输入组件，支持换行、软换行、IME、选区、复制、剪切、粘贴、拖拽选中、只读、禁用、最大长度、行数控制、内部滚动条、状态样式和 helper text。
 - 提供 `Select` 单选下拉组件，支持本地搜索、键盘导航、锚定下拉面板、清除、禁用、状态样式、helper text、外部同步和明暗皮肤。
+- 提供 `Tree` 标准树组件，支持展开折叠、单选/多选、级联复选半选、过滤、键盘导航、虚拟列表、禁用、状态样式、helper text 和外部同步。
 - 通过 `xgpui::prelude::*` 重导出常用组件和配置类型。
 
 ## 安装
@@ -36,7 +37,7 @@ gpui = "0.2.2"
 
 ## 初始化
 
-应用启动时需要调用 `xgpui::install(cx)`。该函数会保证主题状态存在，安装 Lucide 图标字体，并幂等注册 `TextInput`、`Textarea` 和 `Select` 的默认键盘动作。
+应用启动时需要调用 `xgpui::install(cx)`。该函数会保证主题状态存在，安装 Lucide 图标字体，并幂等注册 `TextInput`、`Textarea`、`Select` 和 `Tree` 的默认键盘动作。
 
 ```rust
 use gpui::Application;
@@ -240,6 +241,43 @@ impl SettingsView {
 }
 ```
 
+## Tree
+
+`Tree` 是标准树组件，适合文件树、权限树、导航树和分层资源选择。组件内部维护展开、选中、复选、过滤和键盘活动项，同时提供 `set_nodes`、`set_expanded_keys`、`set_selected_keys`、`set_checked_keys`、`set_filter_text`、`set_disabled`、`set_status` 和 `set_helper_text` 等受控同步方法。
+
+```rust
+use gpui::{Context, Entity, SharedString};
+use xgpui::prelude::*;
+
+/// 示例父视图持有 Tree 实体，便于从外部同步选择状态。
+struct PermissionView {
+    tree: Entity<Tree>,
+}
+
+impl PermissionView {
+    /// 创建一个级联复选权限树。
+    fn new(cx: &mut Context<Self>) -> Self {
+        let tree = cx.new(|cx| {
+            Tree::new(
+                cx,
+                TreeProps::default()
+                    .nodes(vec![TreeNode::new("admin", "后台管理").children(vec![
+                        TreeNode::new("user.read", "查看用户"),
+                        TreeNode::new("user.write", "编辑用户"),
+                    ])])
+                    .expanded_keys(vec![SharedString::from("admin")])
+                    .checkable(true)
+                    .helper_text(Some(SharedString::from("父子节点会自动计算 checked 和半选状态"))),
+            )
+        });
+
+        Self { tree }
+    }
+}
+```
+
+Tree 的 selected 状态和 checked 状态互相独立。过滤使用 `filter_text`，默认按 label 大小写不敏感匹配并展示祖先路径；第一版不内置搜索输入框，可配合 `TextInput` 使用。
+
 ## 示例
 
 运行 `Button` 示例：
@@ -266,7 +304,13 @@ cargo run --example textarea
 cargo run --example select
 ```
 
-三个示例都包含亮色和暗色皮肤切换，用于验证组件在不同主题下的表现。
+运行 `Tree` 示例：
+
+```bash
+cargo run --example tree
+```
+
+组件示例都包含亮色和暗色皮肤切换，用于验证组件在不同主题下的表现。
 
 ## 文档
 
@@ -278,6 +322,7 @@ docs/button.html
 docs/text_input.html
 docs/textarea.html
 docs/select.html
+docs/tree.html
 ```
 
 `docs/index.html` 保留项目接入、主题、示例入口和实现边界；组件级用法、props、公开方法和键盘行为分别维护在对应组件页面中。
@@ -289,16 +334,18 @@ docs/select.html
 ```bash
 cargo fmt --check
 cargo test
+cargo clippy --all-targets --all-features -- -D warnings
 cargo check --examples
 ```
 
-这些命令分别检查代码格式、单元测试和示例编译状态。
+这些命令分别检查代码格式、单元测试、Clippy 警告和示例编译状态。
 
 ## 当前边界
 
 - `TextInput` 目前只实现单行输入，包含普通文本、密码和数字类型，不包含 email 或 search。
 - `Textarea` 目前实现标准多行文本输入，不包含右下角拖拽 resize、密码/数字类型或前后缀 slot。
 - `Select` 目前只实现单选和本地搜索，不包含多选、远程加载、分组选项或自定义 option 渲染。
+- `Tree` 目前实现标准树能力，不包含拖拽排序、异步加载、远程搜索、右键菜单、节点编辑或自定义节点渲染。
 - `Button` 目前实现单按钮能力，不包含按钮组、异步状态管理或任意元素插槽。
 - 项目优先使用稳定 Rust，不引入 nightly 特性。
 - 新增或扩展组件时需要同步支持亮色和暗色皮肤。

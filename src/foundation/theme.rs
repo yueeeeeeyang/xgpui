@@ -146,6 +146,58 @@ pub struct SelectTheme {
     pub popup_offset: Pixels,
 }
 
+/// `Tree` 使用的默认主题 token。
+///
+/// 该结构覆盖树容器、节点行、复选框、图标和状态色的基础颜色。
+/// 尺寸、缩进和行高由 Tree 组件尺寸枚举决定，避免主题承担布局职责。
+#[derive(Clone, Copy, Debug)]
+pub struct TreeTheme {
+    /// 默认容器背景色。
+    pub background: Hsla,
+    /// filled 变体容器背景色。
+    pub filled_background: Hsla,
+    /// 默认容器边框色。
+    pub border: Hsla,
+    /// 正文颜色。
+    pub text: Hsla,
+    /// 弱化文本和图标颜色。
+    pub muted_text: Hsla,
+    /// 辅助文本颜色。
+    pub helper: Hsla,
+    /// 聚焦强调色。
+    pub focus: Hsla,
+    /// 错误状态颜色。
+    pub danger: Hsla,
+    /// 警告状态颜色。
+    pub warning: Hsla,
+    /// 成功状态颜色。
+    pub success: Hsla,
+    /// 禁用态文本颜色。
+    pub disabled_text: Hsla,
+    /// Ghost 变体边框色。
+    pub ghost_border: Hsla,
+    /// 节点 hover 背景色。
+    pub row_hover: Hsla,
+    /// 键盘活动节点背景色。
+    pub row_active: Hsla,
+    /// 已选节点背景色。
+    pub row_selected: Hsla,
+    /// 已选节点文本颜色。
+    pub row_selected_text: Hsla,
+    /// 复选框边框色。
+    pub checkbox_border: Hsla,
+    /// 复选框默认背景色。
+    pub checkbox_background: Hsla,
+    /// 复选框选中背景色。
+    pub checkbox_checked_background: Hsla,
+    /// 复选框选中图标颜色。
+    pub checkbox_checked_text: Hsla,
+    /// 空状态文本颜色。
+    pub empty_text: Hsla,
+    /// 默认圆角。
+    pub radius: Pixels,
+}
+
 /// `Button` 使用的默认主题 token。
 ///
 /// Button 的变体数量多于输入框，因此主题同时提供默认色调和危险色调的主色、
@@ -256,6 +308,14 @@ pub fn select_theme(cx: &App) -> SelectTheme {
     match theme_mode(cx) {
         ThemeMode::Light => light_select_theme(),
         ThemeMode::Dark => dark_select_theme(),
+    }
+}
+
+/// 返回当前应用 `Tree` 应使用的主题。
+pub fn tree_theme(cx: &App) -> TreeTheme {
+    match theme_mode(cx) {
+        ThemeMode::Light => light_tree_theme(),
+        ThemeMode::Dark => dark_tree_theme(),
     }
 }
 
@@ -382,6 +442,62 @@ fn dark_select_theme() -> SelectTheme {
         popup_radius: radius::md(),
         gap: spacing::sm(),
         popup_offset: spacing::xs(),
+    }
+}
+
+/// 返回亮色皮肤下的 `Tree` 主题。
+fn light_tree_theme() -> TreeTheme {
+    TreeTheme {
+        background: color::neutral_0(),
+        filled_background: color::neutral_50(),
+        border: color::neutral_200(),
+        text: color::neutral_900(),
+        muted_text: color::neutral_500(),
+        helper: color::neutral_500(),
+        focus: color::primary_500(),
+        danger: color::danger_500(),
+        warning: color::warning_500(),
+        success: color::success_500(),
+        disabled_text: color::neutral_500(),
+        ghost_border: color::neutral_0(),
+        row_hover: color::neutral_100(),
+        row_active: color::primary_100(),
+        row_selected: color::primary_50(),
+        row_selected_text: color::neutral_900(),
+        checkbox_border: color::neutral_300(),
+        checkbox_background: color::neutral_0(),
+        checkbox_checked_background: color::primary_500(),
+        checkbox_checked_text: color::neutral_0(),
+        empty_text: color::neutral_500(),
+        radius: radius::md(),
+    }
+}
+
+/// 返回暗色皮肤下的 `Tree` 主题。
+fn dark_tree_theme() -> TreeTheme {
+    TreeTheme {
+        background: color::dark_background(),
+        filled_background: color::dark_filled_background(),
+        border: color::dark_border(),
+        text: color::dark_text(),
+        muted_text: color::dark_helper(),
+        helper: color::dark_helper(),
+        focus: color::dark_primary(),
+        danger: color::dark_danger(),
+        warning: color::dark_warning(),
+        success: color::dark_success(),
+        disabled_text: color::dark_disabled_text(),
+        ghost_border: color::dark_muted_border(),
+        row_hover: color::dark_option_hover(),
+        row_active: color::dark_option_highlighted(),
+        row_selected: color::dark_option_selected(),
+        row_selected_text: color::dark_text(),
+        checkbox_border: color::dark_border(),
+        checkbox_background: color::dark_background(),
+        checkbox_checked_background: color::dark_primary(),
+        checkbox_checked_text: color::dark_background(),
+        empty_text: color::dark_helper(),
+        radius: radius::md(),
     }
 }
 

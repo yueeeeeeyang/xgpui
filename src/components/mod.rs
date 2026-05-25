@@ -13,3 +13,6 @@ pub mod textarea;
 
 /// 单选下拉框组件。
 pub mod select;
+
+/// 标准树组件。
+pub mod tree;
