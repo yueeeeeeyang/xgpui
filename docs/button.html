@@ -1,0 +1,195 @@
+<!doctype html>
+<!--
+  xgpui 静态使用文档。
+  本文件按页面聚合当前主题所需内容，并通过 docs/styles.css 复用公共视觉样式。
+  文档保持零构建步骤，便于直接在浏览器中打开和随项目一起版本化维护。
+-->
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Button 按钮组件 - xgpui 使用文档</title>
+    <meta name="description" content="xgpui Button 按钮组件用法、Props 和交互行为说明。" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <!-- 页面主体使用侧边目录和内容区两栏布局，便于快速定位组件 API。 -->
+    <div class="shell">
+      <nav class="sidebar" aria-label="文档目录">
+        <strong>xgpui 文档</strong>
+        <a href="index.html">总览</a>
+        <!-- 组件菜单集中收纳组件页面和当前组件章节，形成稳定的左侧导航树。 -->
+        <details class="nav-group" open>
+          <summary>组件</summary>
+          <div class="nav-tree">
+            <a class="active" href="button.html">Button</a>
+            <div class="nav-subtree">
+              <a href="#overview">概览</a>
+              <a href="#button-usage">基础用法</a>
+              <a href="#button-props">ButtonProps</a>
+              <a href="#button-behavior">行为说明</a>
+            </div>
+            <a href="text_input.html">TextInput</a>
+            <a href="select.html">Select</a>
+          </div>
+        </details>
+      </nav>
+
+      <main class="content">
+        <!-- Button 页面摘要说明当前组件能力和边界。 -->
+        <header class="hero" id="overview">
+          <p class="eyebrow">Component</p>
+          <h1>Button 按钮组件</h1>
+          <p>
+            <code>Button</code> 是基于 gpui <code>Entity</code> 的基础按钮组件，支持常见前端 UI 框架按钮能力：
+            变体、危险色调、尺寸、禁用、加载、块级宽度、Lucide 前后图标、纯图标按钮、鼠标点击和键盘触发。
+          </p>
+          <div class="meta">
+            <span class="pill">Primary / Secondary / Outline / Ghost / Link</span>
+            <span class="pill">Default / Danger</span>
+            <span class="pill">Light / Dark</span>
+            <span class="pill">Lucide Icons</span>
+          </div>
+        </header>
+
+        <!-- Button 基础示例展示常见按钮创建方式。 -->
+        <section class="section" id="button-usage">
+          <h2>Button 基础用法</h2>
+          <p>
+            <code>Button</code> 是 gpui entity 组件，通常在父视图构造函数中通过
+            <code>cx.new</code> 创建。按钮支持主按钮、次级按钮、描边按钮、幽灵按钮和链接按钮，
+            并通过 <code>ButtonTone::Danger</code> 表示危险操作。
+          </p>
+          <div class="code-block">
+            <pre><code class="language-rust">/// 示例父视图，持有一个 Button 实体。
+struct Toolbar {
+    save: Entity&lt;Button&gt;,
+}
+
+impl Toolbar {
+    /// 创建一个带前置图标的主按钮。
+    fn new(cx: &mut Context&lt;Self&gt;) -&gt; Self {
+        let save = cx.new(|cx| {
+            Button::new(
+                cx,
+                ButtonProps::default()
+                    .label("保存")
+                    .leading_icon(LucideIcon::Save)
+                    .on_click(|| {
+                        // 在这里执行保存动作；loading / disabled 时不会触发。
+                    }),
+            )
+        });
+
+        Self { save }
+    }
+}</code></pre>
+          </div>
+          <p class="note">
+            <code>Button</code> 的图标统一使用内置 Lucide 字体。使用图标前仍需调用
+            <code>xgpui::install(cx)</code>，否则图标字体不会被安装到 gpui 文本系统。
+          </p>
+        </section>
+
+        <!-- Button Props 表格逐项说明当前公开配置。 -->
+        <section class="section" id="button-props">
+          <h2>ButtonProps</h2>
+          <p>
+            <code>ButtonProps::default()</code> 提供默认主按钮配置，可通过链式方法覆盖需要的属性。
+          </p>
+          <table class="api-table">
+            <thead>
+              <tr>
+                <th>属性</th>
+                <th>类型</th>
+                <th>说明</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>label</code></td>
+                <td><code>SharedString</code></td>
+                <td>按钮文案。纯图标按钮会隐藏文案，但会用它作为 tooltip fallback。</td>
+              </tr>
+              <tr>
+                <td><code>variant</code></td>
+                <td><code>ButtonVariant</code></td>
+                <td><code>Primary</code>、<code>Secondary</code>、<code>Outline</code>、<code>Ghost</code>、<code>Link</code>。</td>
+              </tr>
+              <tr>
+                <td><code>tone</code></td>
+                <td><code>ButtonTone</code></td>
+                <td><code>Default</code> 或 <code>Danger</code>，用于表达默认操作或危险操作。</td>
+              </tr>
+              <tr>
+                <td><code>size</code></td>
+                <td><code>ButtonSize</code></td>
+                <td><code>Small</code>、<code>Medium</code>、<code>Large</code>，影响高度、字号、内边距和图标尺寸。</td>
+              </tr>
+              <tr>
+                <td><code>disabled</code></td>
+                <td><code>bool</code></td>
+                <td>禁用后不可聚焦、不可点击，也不会触发 <code>on_click</code>。</td>
+              </tr>
+              <tr>
+                <td><code>loading</code></td>
+                <td><code>bool</code></td>
+                <td>展示圆圈 loading 动画并阻止鼠标和键盘触发。</td>
+              </tr>
+              <tr>
+                <td><code>block</code></td>
+                <td><code>bool</code></td>
+                <td>按钮宽度占满父容器。</td>
+              </tr>
+              <tr>
+                <td><code>icon_only</code></td>
+                <td><code>bool</code></td>
+                <td>渲染正方形纯图标按钮，建议同时提供图标和 tooltip。</td>
+              </tr>
+              <tr>
+                <td><code>leading_icon</code> / <code>trailing_icon</code></td>
+                <td><code>Option&lt;LucideIcon&gt;</code></td>
+                <td>前置和后置 Lucide 图标。加载状态会临时用 loading 圆圈动画替代前置图标。</td>
+              </tr>
+              <tr>
+                <td><code>tooltip</code></td>
+                <td><code>Option&lt;SharedString&gt;</code></td>
+                <td>hover 提示文案。纯图标按钮未设置时会回退使用 <code>label</code>。</td>
+              </tr>
+              <tr>
+                <td><code>on_click</code></td>
+                <td><code>Option&lt;Box&lt;dyn FnMut()&gt;&gt;</code></td>
+                <td>有效点击回调，只在非禁用且非加载时触发。</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <!-- Button 行为说明帮助使用者理解键盘和状态边界。 -->
+        <section class="section" id="button-behavior">
+          <h2>Button 行为</h2>
+          <div class="two-col">
+            <div class="mini-card">
+              <h3>交互</h3>
+              <ul>
+                <li>鼠标点击会先聚焦按钮，再触发 <code>on_click</code>。</li>
+                <li>按钮聚焦后，点击按钮外部区域会释放焦点并移除焦点边框。</li>
+                <li>按钮获得焦点后，<code>Enter</code> 和 <code>Space</code> 会触发点击回调。</li>
+                <li><code>disabled</code> 和 <code>loading</code> 都会阻止点击回调。</li>
+              </ul>
+            </div>
+            <div class="mini-card">
+              <h3>视觉</h3>
+              <ul>
+                <li>所有颜色来自 <code>foundation::theme::ButtonTheme</code>，支持亮色和暗色皮肤。</li>
+                <li><code>icon_only</code> 使用正方形尺寸，并隐藏 <code>label</code> 文本。</li>
+                <li>loading 图标使用 gpui 动画系统驱动圆环弧线持续转动，不改变按钮布局尺寸。</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script src="highlight.js"></script>
+  </body>
+</html>

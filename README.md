@@ -228,13 +228,16 @@ cargo run --example select
 
 ## 文档
 
-静态 HTML 使用文档位于：
+静态 HTML 使用文档位于 `docs` 目录，并已按组件拆分：
 
 ```text
 docs/index.html
+docs/button.html
+docs/text_input.html
+docs/select.html
 ```
 
-该文档包含组件用法、props 说明、公开方法、键盘行为、主题能力和当前边界。
+`docs/index.html` 保留项目接入、主题、示例入口和实现边界；组件级用法、props、公开方法和键盘行为分别维护在对应组件页面中。
 
 ## 开发检查
 

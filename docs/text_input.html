@@ -1,0 +1,377 @@
+<!doctype html>
+<!--
+  xgpui 静态使用文档。
+  本文件按页面聚合当前主题所需内容，并通过 docs/styles.css 复用公共视觉样式。
+  文档保持零构建步骤，便于直接在浏览器中打开和随项目一起版本化维护。
+-->
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TextInput 单行输入组件 - xgpui 使用文档</title>
+    <meta name="description" content="xgpui TextInput 单行输入组件用法、类型、Props、插槽、方法和键盘行为说明。" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <!-- 页面主体使用侧边目录和内容区两栏布局，便于快速定位组件 API。 -->
+    <div class="shell">
+      <nav class="sidebar" aria-label="文档目录">
+        <strong>xgpui 文档</strong>
+        <a href="index.html">总览</a>
+        <!-- 组件菜单集中收纳组件页面和当前组件章节，形成稳定的左侧导航树。 -->
+        <details class="nav-group" open>
+          <summary>组件</summary>
+          <div class="nav-tree">
+            <a href="button.html">Button</a>
+            <a class="active" href="text_input.html">TextInput</a>
+            <div class="nav-subtree">
+              <a href="#overview">概览</a>
+              <a href="#basic-usage">基础用法</a>
+              <a href="#input-types">输入类型</a>
+              <a href="#props">TextInputProps</a>
+              <a href="#slots">前后缀插槽</a>
+              <a href="#methods">公开方法</a>
+              <a href="#keyboard">键盘与输入行为</a>
+            </div>
+            <a href="select.html">Select</a>
+          </div>
+        </details>
+      </nav>
+
+      <main class="content">
+        <!-- TextInput 页面摘要说明当前组件能力和边界。 -->
+        <header class="hero" id="overview">
+          <p class="eyebrow">Component</p>
+          <h1>TextInput 单行输入组件</h1>
+          <p>
+            <code>TextInput</code> 是完整的单行文本输入组件，支持普通文本、密码、数字、IME、选区、剪贴板、
+            鼠标定位、拖拽选中、自动滚动、清除、只读、禁用、状态样式和前后缀插槽。
+          </p>
+          <div class="meta">
+            <span class="pill">Text / Password / Number</span>
+            <span class="pill">IME</span>
+            <span class="pill">Unicode Grapheme</span>
+            <span class="pill">Light / Dark</span>
+          </div>
+        </header>
+
+        <!-- 基础示例展示最小可用的 TextInput 创建方式。 -->
+        <section class="section" id="basic-usage">
+          <h2>基础用法</h2>
+          <p>
+            <code>TextInput</code> 是 gpui entity 组件，通常在父视图构造函数中通过
+            <code>cx.new</code> 创建，再在 <code>Render</code> 中作为子元素渲染。
+          </p>
+          <div class="code-block">
+            <pre><code class="language-rust">/// 示例父视图，持有一个 TextInput 实体。
+struct FormView {
+    username: Entity&lt;TextInput&gt;,
+}
+
+impl FormView {
+    /// 创建输入框并配置占位文本、清除按钮、最大长度和变化回调。
+    fn new(cx: &mut Context&lt;Self&gt;) -> Self {
+        let username = cx.new(|cx| {
+            TextInput::new(
+                cx,
+                TextInputProps::default()
+                    .placeholder("请输入用户名")
+                    .clearable(true)
+                    .max_length(Some(20))
+                    .helper_text(Some(SharedString::from("最多输入 20 个字素簇")))
+                    .on_change(|value| {
+                        // 在这里同步表单状态或触发上层业务逻辑。
+                        println!("当前输入值：{value}");
+                    }),
+            )
+        });
+
+        Self { username }
+    }
+}
+
+impl Render for FormView {
+    /// 渲染父视图内容。
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context&lt;Self&gt;) -> impl IntoElement {
+        div().child(self.username.clone())
+    }
+}</code></pre>
+          </div>
+        </section>
+
+        <!-- 输入类型章节说明 TextInputType 的行为边界，避免使用者误以为 Number 会解析为数值。 -->
+        <section class="section" id="input-types">
+          <h2>输入类型</h2>
+          <p>
+            <code>TextInputType</code> 用于配置输入框内容语义。当前支持 <code>Text</code>、
+            <code>Password</code> 和 <code>Number</code>；组件值始终是 <code>SharedString</code>，
+            不会因为类型不同而返回掩码文本或数值类型。
+          </p>
+          <div class="code-block">
+            <pre><code class="language-rust">let password = cx.new(|cx| {
+    TextInput::new(
+        cx,
+        TextInputProps::default()
+            .input_type(TextInputType::Password)
+            .placeholder("请输入密码")
+            .clearable(true),
+    )
+});
+
+let amount = cx.new(|cx| {
+    TextInput::new(
+        cx,
+        TextInputProps::default()
+            .input_type(TextInputType::Number)
+            .placeholder("请输入金额"),
+    )
+});</code></pre>
+          </div>
+          <div class="two-col">
+            <div class="mini-card">
+              <h3>Password</h3>
+              <ul>
+                <li>默认按 Unicode 字素簇显示为掩码字符。</li>
+                <li>非禁用状态下始终显示眼睛按钮，可切换真实内容展示。</li>
+                <li><code>value</code>、<code>on_change</code>、复制和剪切都使用真实文本。</li>
+              </ul>
+            </div>
+            <div class="mini-card">
+              <h3>Number</h3>
+              <ul>
+                <li>允许空值、负号、小数点以及 <code>1.</code>、<code>-.5</code> 等输入中间态。</li>
+                <li>拒绝字母、多小数点和错误位置的负号。</li>
+                <li>不做 min、max、step、格式化或数值解析。</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        <!-- Props 表格逐项说明当前公开配置，不描述未实现能力。 -->
+        <section class="section" id="props">
+          <h2>TextInputProps</h2>
+          <p>
+            <code>TextInputProps::default()</code> 提供默认配置，可通过链式方法覆盖需要的属性。
+          </p>
+          <table class="api-table">
+            <thead>
+              <tr>
+                <th>属性</th>
+                <th>类型</th>
+                <th>说明</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>value</code></td>
+                <td><code>SharedString</code></td>
+                <td>初始输入值。创建后需要外部同步时使用 <code>set_value</code>。</td>
+              </tr>
+              <tr>
+                <td><code>placeholder</code></td>
+                <td><code>SharedString</code></td>
+                <td>空值时显示的占位文本。</td>
+              </tr>
+              <tr>
+                <td><code>disabled</code></td>
+                <td><code>bool</code></td>
+                <td>禁用后不能聚焦、选择或编辑。</td>
+              </tr>
+              <tr>
+                <td><code>readonly</code></td>
+                <td><code>bool</code></td>
+                <td>只读后可以聚焦、选择和复制，但不能修改、粘贴、剪切或清除。</td>
+              </tr>
+              <tr>
+                <td><code>clearable</code></td>
+                <td><code>bool</code></td>
+                <td>有值且非禁用、非只读时显示清除按钮。</td>
+              </tr>
+              <tr>
+                <td><code>required</code></td>
+                <td><code>bool</code></td>
+                <td>显示必填语义标记。当前版本不执行内置校验。</td>
+              </tr>
+              <tr>
+                <td><code>max_length</code></td>
+                <td><code>Option&lt;usize&gt;</code></td>
+                <td>最大长度按 Unicode 字素簇计算，粘贴和 IME 输入都会遵守该限制。</td>
+              </tr>
+              <tr>
+                <td><code>size</code></td>
+                <td><code>TextInputSize</code></td>
+                <td><code>Small</code>、<code>Medium</code>、<code>Large</code>，影响高度、字号、行高和内边距。</td>
+              </tr>
+              <tr>
+                <td><code>variant</code></td>
+                <td><code>TextInputVariant</code></td>
+                <td><code>Outlined</code>、<code>Filled</code>、<code>Ghost</code>，影响背景和边框展示。</td>
+              </tr>
+              <tr>
+                <td><code>status</code></td>
+                <td><code>TextInputStatus</code></td>
+                <td><code>Default</code>、<code>Error</code>、<code>Warning</code>、<code>Success</code>，只负责语义颜色。</td>
+              </tr>
+              <tr>
+                <td><code>input_type</code></td>
+                <td><code>TextInputType</code></td>
+                <td><code>Text</code>、<code>Password</code>、<code>Number</code>，控制密码掩码和数字输入限制。</td>
+              </tr>
+              <tr>
+                <td><code>helper_text</code></td>
+                <td><code>Option&lt;SharedString&gt;</code></td>
+                <td>输入框下方辅助文本，颜色会跟随语义状态。</td>
+              </tr>
+              <tr>
+                <td><code>prefix</code></td>
+                <td><code>Option&lt;TextInputSlot&gt;</code></td>
+                <td>前缀插槽，每次渲染生成新的 gpui 元素。</td>
+              </tr>
+              <tr>
+                <td><code>suffix</code></td>
+                <td><code>Option&lt;TextInputSlot&gt;</code></td>
+                <td>后缀插槽，每次渲染生成新的 gpui 元素。</td>
+              </tr>
+              <tr>
+                <td><code>on_change</code></td>
+                <td><code>FnMut(SharedString)</code></td>
+                <td>内容确实变化时触发，光标移动、选区变化和焦点变化不会触发。</td>
+              </tr>
+              <tr>
+                <td><code>on_focus</code> / <code>on_blur</code></td>
+                <td><code>FnMut()</code></td>
+                <td>聚焦和失焦回调。</td>
+              </tr>
+              <tr>
+                <td><code>on_enter</code></td>
+                <td><code>FnMut(SharedString)</code></td>
+                <td>按下回车时传出当前完整文本，适合搜索和简单提交。</td>
+              </tr>
+              <tr>
+                <td><code>on_key_down</code></td>
+                <td><code>FnMut(Keystroke)</code></td>
+                <td>透出 gpui 按键事件，方便上层记录或响应特殊按键。</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <!-- 插槽章节说明为什么使用可重复闭包，以及如何构造任意元素。 -->
+        <section class="section" id="slots">
+          <h2>前后缀插槽</h2>
+          <p>
+            <code>TextInputSlot</code> 保存的是可重复调用的闭包，每次渲染都会生成新的
+            <code>AnyElement</code>。这样可以避免持有一次性 gpui element 引发的生命周期和重复渲染问题。
+          </p>
+          <div class="code-block">
+            <pre><code class="language-rust">let url_input = cx.new(|cx| {
+    TextInput::new(
+        cx,
+        TextInputProps::default()
+            .placeholder("example.com")
+            .prefix(Some(TextInputSlot::new(|| {
+                // 前缀可以是任意 gpui 元素。
+                div().child("https://").into_any_element()
+            })))
+            .suffix(Some(TextInputSlot::text(".com")))
+            .clearable(true),
+    )
+});</code></pre>
+          </div>
+        </section>
+
+        <!-- 方法章节列出 Entity 更新时可调用的公开方法。 -->
+        <section class="section" id="methods">
+          <h2>公开方法</h2>
+          <table class="api-table">
+            <thead>
+              <tr>
+                <th>方法</th>
+                <th>用途</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>TextInput::new(cx, props)</code></td>
+                <td>创建组件状态。</td>
+              </tr>
+              <tr>
+                <td><code>value()</code></td>
+                <td>读取当前文本值。</td>
+              </tr>
+              <tr>
+                <td><code>set_value(value, cx)</code></td>
+                <td>从外部同步文本值，不触发 <code>on_change</code>，避免同步回环。</td>
+              </tr>
+              <tr>
+                <td><code>clear(cx)</code></td>
+                <td>清空文本，并在内容变化时触发 <code>on_change</code>。</td>
+              </tr>
+              <tr>
+                <td><code>focus_handle()</code></td>
+                <td>返回 gpui 焦点句柄，便于父组件主动聚焦或协调焦点。</td>
+              </tr>
+              <tr>
+                <td><code>select_all(cx)</code></td>
+                <td>选中全部文本。</td>
+              </tr>
+              <tr>
+                <td><code>move_to_end(cx)</code></td>
+                <td>把光标移动到文本末尾。</td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="code-block">
+            <pre><code class="language-rust">self.username.update(cx, |input, cx| {
+    // 外部写入值后移动到末尾，适合受控表单回填场景。
+    input.set_value("由父组件写入", cx);
+    input.move_to_end(cx);
+});</code></pre>
+          </div>
+        </section>
+
+        <!-- 行为说明便于使用者理解 TextInput 与浏览器 input 的差异和边界。 -->
+        <section class="section" id="keyboard">
+          <h2>键盘与输入行为</h2>
+          <div class="two-col">
+            <div class="mini-card">
+              <h3>文本编辑</h3>
+              <ul>
+                <li>支持单行输入，粘贴多行文本时会把换行规范化为空格。</li>
+                <li>支持 Backspace、Delete、方向键、Home、End、全选、复制、剪切和粘贴。</li>
+                <li>支持中文输入法 marked text 和候选框范围定位。</li>
+                <li>密码类型只改变显示文本，不改变真实值和剪贴板文本。</li>
+                <li>数字类型会拒绝不符合数字形态的键盘输入、粘贴和 IME 提交。</li>
+              </ul>
+            </div>
+            <div class="mini-card">
+              <h3>选择与滚动</h3>
+              <ul>
+                <li>支持鼠标定位、拖选和 Shift 扩展选择。</li>
+                <li>拖选到输入框边缘时会自动横向滚动并继续扩展选区。</li>
+                <li>光标静止后会闪烁，移动或输入时会恢复常亮。</li>
+              </ul>
+            </div>
+            <div class="mini-card">
+              <h3>Unicode 处理</h3>
+              <ul>
+                <li>光标移动按 Unicode 字素簇边界处理。</li>
+                <li><code>max_length</code> 按用户可感知字素簇计数。</li>
+                <li>内部包含 UTF-8 和 UTF-16 区间转换，用于平台输入协议。</li>
+              </ul>
+            </div>
+            <div class="mini-card">
+              <h3>状态限制</h3>
+              <ul>
+                <li><code>disabled</code> 禁止聚焦、选择和编辑。</li>
+                <li><code>readonly</code> 允许聚焦、选择和复制，但禁止修改。</li>
+                <li><code>status</code> 只展示语义颜色，不内置表单校验器。</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script src="highlight.js"></script>
+  </body>
+</html>

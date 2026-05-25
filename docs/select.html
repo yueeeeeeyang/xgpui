@@ -1,0 +1,302 @@
+<!doctype html>
+<!--
+  xgpui 静态使用文档。
+  本文件按页面聚合当前主题所需内容，并通过 docs/styles.css 复用公共视觉样式。
+  文档保持零构建步骤，便于直接在浏览器中打开和随项目一起版本化维护。
+-->
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Select 单选下拉组件 - xgpui 使用文档</title>
+    <meta name="description" content="xgpui Select 单选下拉组件用法、Props、方法和键盘行为说明。" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <!-- 页面主体使用侧边目录和内容区两栏布局，便于快速定位组件 API。 -->
+    <div class="shell">
+      <nav class="sidebar" aria-label="文档目录">
+        <strong>xgpui 文档</strong>
+        <a href="index.html">总览</a>
+        <!-- 组件菜单集中收纳组件页面和当前组件章节，形成稳定的左侧导航树。 -->
+        <details class="nav-group" open>
+          <summary>组件</summary>
+          <div class="nav-tree">
+            <a href="button.html">Button</a>
+            <a href="text_input.html">TextInput</a>
+            <a class="active" href="select.html">Select</a>
+            <div class="nav-subtree">
+              <a href="#overview">概览</a>
+              <a href="#select-usage">基础用法</a>
+              <a href="#select-props">SelectProps</a>
+              <a href="#select-methods">公开方法</a>
+              <a href="#select-keyboard">键盘行为</a>
+            </div>
+          </div>
+        </details>
+      </nav>
+
+      <main class="content">
+        <!-- Select 页面摘要说明当前组件能力和边界。 -->
+        <header class="hero" id="overview">
+          <p class="eyebrow">Component</p>
+          <h1>Select 单选下拉组件</h1>
+          <p>
+            <code>Select</code> 是单选下拉组件，支持本地搜索、锚定下拉面板、键盘导航、清除、禁用、状态样式、
+            helper text、外部同步和明暗皮肤。第一版不包含多选、远程加载、分组选项或自定义 option 渲染。
+          </p>
+          <div class="meta">
+            <span class="pill">Single Select</span>
+            <span class="pill">Searchable</span>
+            <span class="pill">Keyboard Navigation</span>
+            <span class="pill">Light / Dark</span>
+          </div>
+        </header>
+
+        <!-- Select 基础示例展示单选组件的创建、选项和变化回调。 -->
+        <section class="section" id="select-usage">
+          <h2>Select 基础用法</h2>
+          <p>
+            <code>Select</code> 是 gpui entity 组件，通常在父视图中通过 <code>cx.new</code>
+            创建。第一版只支持单选、本地搜索和文本 option，不支持多选、远程加载、分组或自定义
+            option 渲染。
+          </p>
+          <div class="code-block">
+            <pre><code class="language-rust">/// 示例父视图，持有一个 Select 实体。
+struct FormView {
+    city: Entity&lt;Select&gt;,
+}
+
+impl FormView {
+    /// 创建城市选择框并配置选项、搜索、清除和变化回调。
+    fn new(cx: &mut Context&lt;Self&gt;) -> Self {
+        let city = cx.new(|cx| {
+            Select::new(
+                cx,
+                SelectProps::default()
+                    .placeholder("请选择城市")
+                    .options(vec![
+                        SelectOption::new("beijing", "北京"),
+                        SelectOption::new("shanghai", "上海"),
+                        SelectOption::new("disabled", "不可选城市").disabled(true),
+                    ])
+                    .searchable(true)
+                    .clearable(true)
+                    .helper_text(Some(SharedString::from("支持键盘导航和本地搜索")))
+                    .on_change(|value| {
+                        // 在这里同步表单状态或触发上层业务逻辑。
+                        println!("当前选择值：{value:?}");
+                    }),
+            )
+        });
+
+        Self { city }
+    }
+}
+
+impl Render for FormView {
+    /// 渲染父视图内容。
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context&lt;Self&gt;) -> impl IntoElement {
+        div().child(self.city.clone())
+    }
+}</code></pre>
+          </div>
+          <p class="note">
+            <code>SelectOption::value</code> 建议在同组选项中保持唯一。如果出现重复值，组件会按第一个
+            匹配项展示和选择，避免运行时额外报错破坏现有数据流。
+          </p>
+        </section>
+
+        <!-- Select Props 表格逐项说明当前公开配置。 -->
+        <section class="section" id="select-props">
+          <h2>SelectProps</h2>
+          <p>
+            <code>SelectProps::default()</code> 提供默认配置，可通过链式方法覆盖需要的属性。
+          </p>
+          <table class="api-table">
+            <thead>
+              <tr>
+                <th>属性</th>
+                <th>类型</th>
+                <th>说明</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>value</code></td>
+                <td><code>Option&lt;SharedString&gt;</code></td>
+                <td>初始选中值。创建后需要外部同步时使用 <code>set_value</code>。</td>
+              </tr>
+              <tr>
+                <td><code>placeholder</code></td>
+                <td><code>SharedString</code></td>
+                <td>未选择时显示的占位文本。</td>
+              </tr>
+              <tr>
+                <td><code>options</code></td>
+                <td><code>Vec&lt;SelectOption&gt;</code></td>
+                <td>下拉选项列表。<code>SelectOption</code> 包含 <code>value</code>、<code>label</code> 和 <code>disabled</code>。</td>
+              </tr>
+              <tr>
+                <td><code>disabled</code></td>
+                <td><code>bool</code></td>
+                <td>禁用后不能聚焦、打开、选择或清除。</td>
+              </tr>
+              <tr>
+                <td><code>clearable</code></td>
+                <td><code>bool</code></td>
+                <td>有值且非禁用时显示清除按钮。</td>
+              </tr>
+              <tr>
+                <td><code>required</code></td>
+                <td><code>bool</code></td>
+                <td>显示必填语义标记。当前版本不执行内置校验。</td>
+              </tr>
+              <tr>
+                <td><code>searchable</code></td>
+                <td><code>bool</code></td>
+                <td>打开面板后直接在原选择框内输入内容，按 <code>label</code> 做大小写不敏感子串匹配。</td>
+              </tr>
+              <tr>
+                <td><code>search_placeholder</code></td>
+                <td><code>SharedString</code></td>
+                <td>搜索模式下原选择框为空时显示的占位文本。</td>
+              </tr>
+              <tr>
+                <td><code>size</code></td>
+                <td><code>SelectSize</code></td>
+                <td><code>Small</code>、<code>Medium</code>、<code>Large</code>，影响触发器和选项尺寸。</td>
+              </tr>
+              <tr>
+                <td><code>variant</code></td>
+                <td><code>SelectVariant</code></td>
+                <td><code>Outlined</code>、<code>Filled</code>、<code>Ghost</code>，影响触发器背景和边框。</td>
+              </tr>
+              <tr>
+                <td><code>status</code></td>
+                <td><code>SelectStatus</code></td>
+                <td><code>Default</code>、<code>Error</code>、<code>Warning</code>、<code>Success</code>，只负责语义颜色。</td>
+              </tr>
+              <tr>
+                <td><code>helper_text</code></td>
+                <td><code>Option&lt;SharedString&gt;</code></td>
+                <td>选择框下方辅助文本，颜色会跟随语义状态。</td>
+              </tr>
+              <tr>
+                <td><code>max_popup_height</code></td>
+                <td><code>Pixels</code></td>
+                <td>下拉面板最大高度，超过后内部滚动。</td>
+              </tr>
+              <tr>
+                <td><code>empty_text</code></td>
+                <td><code>SharedString</code></td>
+                <td>选项为空或搜索结果为空时展示的文本。</td>
+              </tr>
+              <tr>
+                <td><code>on_change</code></td>
+                <td><code>FnMut(Option&lt;SharedString&gt;)</code></td>
+                <td>用户选择或清除导致值变化时触发，外部 <code>set_value</code> 不触发。</td>
+              </tr>
+              <tr>
+                <td><code>on_open_change</code></td>
+                <td><code>FnMut(bool)</code></td>
+                <td>下拉面板打开状态变化时触发。</td>
+              </tr>
+              <tr>
+                <td><code>on_search_change</code></td>
+                <td><code>FnMut(SharedString)</code></td>
+                <td>搜索词变化时触发。</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <!-- Select 方法章节列出 Entity 更新时可调用的公开方法。 -->
+        <section class="section" id="select-methods">
+          <h2>Select 公开方法</h2>
+          <table class="api-table">
+            <thead>
+              <tr>
+                <th>方法</th>
+                <th>用途</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>Select::new(cx, props)</code></td>
+                <td>创建组件状态。</td>
+              </tr>
+              <tr>
+                <td><code>value()</code></td>
+                <td>读取当前选中值。</td>
+              </tr>
+              <tr>
+                <td><code>set_value(value, cx)</code></td>
+                <td>从外部同步选中值，不触发 <code>on_change</code>，避免同步回环。</td>
+              </tr>
+              <tr>
+                <td><code>clear(cx)</code></td>
+                <td>清空当前选择，并在值变化时触发 <code>on_change</code>。</td>
+              </tr>
+              <tr>
+                <td><code>open(cx)</code> / <code>close(cx)</code> / <code>toggle(cx)</code></td>
+                <td>从外部控制下拉面板打开状态。</td>
+              </tr>
+              <tr>
+                <td><code>focus_handle()</code></td>
+                <td>返回 gpui 焦点句柄，便于父组件主动聚焦或协调焦点。</td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="code-block">
+            <pre><code class="language-rust">self.city.update(cx, |select, cx| {
+    // 外部写入值不会触发 on_change，适合受控表单回填场景。
+    select.set_value(Some(SharedString::from("shanghai")), cx);
+});</code></pre>
+          </div>
+        </section>
+
+        <!-- Select 键盘行为说明保持与默认 key binding 实现一致。 -->
+        <section class="section" id="select-keyboard">
+          <h2>Select 键盘行为</h2>
+          <div class="two-col">
+            <div class="mini-card">
+              <h3>打开与选择</h3>
+              <ul>
+                <li><code>Enter</code> / <code>Space</code>：关闭时打开，打开时选择当前高亮项。</li>
+                <li><code>Escape</code>：关闭下拉面板。</li>
+                <li><code>Tab</code>：保留系统焦点切换行为，同时关闭下拉面板。</li>
+              </ul>
+            </div>
+            <div class="mini-card">
+              <h3>导航</h3>
+              <ul>
+                <li><code>ArrowDown</code> / <code>ArrowUp</code>：打开面板并移动高亮项。</li>
+                <li><code>Home</code> / <code>End</code>：移动到第一个或最后一个可选项。</li>
+                <li>键盘高亮会跳过禁用选项。</li>
+              </ul>
+            </div>
+            <div class="mini-card">
+              <h3>搜索</h3>
+              <ul>
+                <li><code>searchable = true</code> 时，打开面板会清空搜索词。</li>
+                <li>输入普通字符会直接显示在原选择框内，并按 <code>label</code> 进行大小写不敏感本地过滤。</li>
+                <li>搜索编辑由 <code>Select</code> 内部实现，支持光标闪烁、移动、选区、拖拽选中、复制和粘贴。</li>
+                <li><code>Backspace</code> 会删除搜索词末尾的一个 Unicode 字素簇。</li>
+              </ul>
+            </div>
+            <div class="mini-card">
+              <h3>面板</h3>
+              <ul>
+                <li>下拉面板通过 <code>gpui::anchored()</code> 锚定到触发器下方。</li>
+                <li>超过 <code>max_popup_height</code> 后内部滚动。</li>
+                <li>点击组件外部会关闭面板；当前版本不主动做上下翻转。</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script src="highlight.js"></script>
+  </body>
+</html>
