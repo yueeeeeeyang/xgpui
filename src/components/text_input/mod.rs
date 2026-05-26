@@ -185,6 +185,29 @@ impl TextInput {
         }
     }
 
+    /// 从组合型组件内部同步禁用状态。
+    ///
+    /// 这是受控状态写入，不代表用户主动离开输入框，因此不会触发 `on_change`。如果禁用前输入框
+    /// 正在聚焦，组件会停止光标闪烁和拖拽选择状态，下一次渲染时也不会再注册键盘和鼠标编辑动作。
+    /// 该方法只在 crate 内部开放，避免在本轮 DataTable 需求中顺带扩大 `TextInput` 的公开 API。
+    pub(crate) fn set_disabled(&mut self, disabled: bool, cx: &mut Context<Self>) {
+        if self.disabled == disabled {
+            return;
+        }
+
+        self.disabled = disabled;
+        if disabled {
+            self.is_focused = false;
+            self.is_selecting = false;
+            self.auto_scroll_direction = None;
+            self.auto_scroll_active = false;
+            self.stop_cursor_blink();
+        } else {
+            self.restart_cursor_blink(cx);
+        }
+        cx.notify();
+    }
+
     /// 清空文本并触发变化回调。
     pub fn clear(&mut self, cx: &mut Context<Self>) {
         if !self.can_edit() {

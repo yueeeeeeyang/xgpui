@@ -198,6 +198,62 @@ pub struct TreeTheme {
     pub radius: Pixels,
 }
 
+/// `DataTable` 使用的默认主题 token。
+///
+/// 该结构覆盖表格容器、表头、行状态、复选框和状态色。列宽、行高和分页布局由
+/// DataTable 自身尺寸枚举决定，主题层只负责明暗皮肤下的设计颜色。
+#[derive(Clone, Copy, Debug)]
+pub struct DataTableTheme {
+    /// 默认容器背景色。
+    pub background: Hsla,
+    /// filled 变体背景色。
+    pub filled_background: Hsla,
+    /// 默认容器边框色。
+    pub border: Hsla,
+    /// 正文颜色。
+    pub text: Hsla,
+    /// 弱化文本和图标颜色。
+    pub muted_text: Hsla,
+    /// 辅助文本颜色。
+    pub helper: Hsla,
+    /// 表头背景色。
+    pub header_background: Hsla,
+    /// 表头文字颜色。
+    pub header_text: Hsla,
+    /// 聚焦强调色。
+    pub focus: Hsla,
+    /// 错误状态颜色。
+    pub danger: Hsla,
+    /// 警告状态颜色。
+    pub warning: Hsla,
+    /// 成功状态颜色。
+    pub success: Hsla,
+    /// 禁用态文本颜色。
+    pub disabled_text: Hsla,
+    /// Ghost 变体边框色。
+    pub ghost_border: Hsla,
+    /// 行 hover 背景色。
+    pub row_hover: Hsla,
+    /// 键盘活动行背景色。
+    pub row_active: Hsla,
+    /// 已选行背景色。
+    pub row_selected: Hsla,
+    /// 行分割线颜色。
+    pub row_border: Hsla,
+    /// 复选框边框色。
+    pub checkbox_border: Hsla,
+    /// 复选框默认背景色。
+    pub checkbox_background: Hsla,
+    /// 复选框选中背景色。
+    pub checkbox_checked_background: Hsla,
+    /// 复选框选中图标颜色。
+    pub checkbox_checked_text: Hsla,
+    /// 空状态文本颜色。
+    pub empty_text: Hsla,
+    /// 默认圆角。
+    pub radius: Pixels,
+}
+
 /// `Button` 使用的默认主题 token。
 ///
 /// Button 的变体数量多于输入框，因此主题同时提供默认色调和危险色调的主色、
@@ -316,6 +372,14 @@ pub fn tree_theme(cx: &App) -> TreeTheme {
     match theme_mode(cx) {
         ThemeMode::Light => light_tree_theme(),
         ThemeMode::Dark => dark_tree_theme(),
+    }
+}
+
+/// 返回当前应用 `DataTable` 应使用的主题。
+pub fn data_table_theme(cx: &App) -> DataTableTheme {
+    match theme_mode(cx) {
+        ThemeMode::Light => light_data_table_theme(),
+        ThemeMode::Dark => dark_data_table_theme(),
     }
 }
 
@@ -492,6 +556,66 @@ fn dark_tree_theme() -> TreeTheme {
         row_active: color::dark_option_highlighted(),
         row_selected: color::dark_option_selected(),
         row_selected_text: color::dark_text(),
+        checkbox_border: color::dark_border(),
+        checkbox_background: color::dark_background(),
+        checkbox_checked_background: color::dark_primary(),
+        checkbox_checked_text: color::dark_background(),
+        empty_text: color::dark_helper(),
+        radius: radius::md(),
+    }
+}
+
+/// 返回亮色皮肤下的 `DataTable` 主题。
+fn light_data_table_theme() -> DataTableTheme {
+    DataTableTheme {
+        background: color::neutral_0(),
+        filled_background: color::neutral_50(),
+        border: color::neutral_200(),
+        text: color::neutral_900(),
+        muted_text: color::neutral_500(),
+        helper: color::neutral_500(),
+        header_background: color::neutral_50(),
+        header_text: color::neutral_900(),
+        focus: color::primary_500(),
+        danger: color::danger_500(),
+        warning: color::warning_500(),
+        success: color::success_500(),
+        disabled_text: color::neutral_500(),
+        ghost_border: color::neutral_0(),
+        row_hover: color::neutral_100(),
+        row_active: color::primary_50(),
+        row_selected: color::primary_50(),
+        row_border: color::neutral_200(),
+        checkbox_border: color::neutral_300(),
+        checkbox_background: color::neutral_0(),
+        checkbox_checked_background: color::primary_500(),
+        checkbox_checked_text: color::neutral_0(),
+        empty_text: color::neutral_500(),
+        radius: radius::md(),
+    }
+}
+
+/// 返回暗色皮肤下的 `DataTable` 主题。
+fn dark_data_table_theme() -> DataTableTheme {
+    DataTableTheme {
+        background: color::dark_background(),
+        filled_background: color::dark_filled_background(),
+        border: color::dark_border(),
+        text: color::dark_text(),
+        muted_text: color::dark_helper(),
+        helper: color::dark_helper(),
+        header_background: color::dark_filled_background(),
+        header_text: color::dark_text(),
+        focus: color::dark_primary(),
+        danger: color::dark_danger(),
+        warning: color::dark_warning(),
+        success: color::dark_success(),
+        disabled_text: color::dark_disabled_text(),
+        ghost_border: color::dark_muted_border(),
+        row_hover: color::dark_option_hover(),
+        row_active: color::dark_option_highlighted(),
+        row_selected: color::dark_option_selected(),
+        row_border: color::dark_border(),
         checkbox_border: color::dark_border(),
         checkbox_background: color::dark_background(),
         checkbox_checked_background: color::dark_primary(),

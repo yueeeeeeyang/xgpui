@@ -4,6 +4,11 @@
 //! 避免在业务代码中反复书写较长的模块路径。
 
 pub use crate::components::button::{Button, ButtonProps, ButtonSize, ButtonTone, ButtonVariant};
+pub use crate::components::data_table::{
+    DataTable, DataTableAlign, DataTableCellContext, DataTableColumn, DataTablePageState,
+    DataTableProps, DataTableSelectionMode, DataTableSize, DataTableSort, DataTableSortDirection,
+    DataTableStatus, DataTableVariant,
+};
 pub use crate::components::select::{
     Select, SelectOption, SelectProps, SelectSize, SelectStatus, SelectVariant,
 };

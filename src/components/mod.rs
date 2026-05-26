@@ -16,3 +16,6 @@ pub mod select;
 
 /// 标准树组件。
 pub mod tree;
+
+/// 标准数据表格组件。
+pub mod data_table;

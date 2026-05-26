@@ -2,7 +2,7 @@
 
 `xgpui` 是一个基于 `gpui` 的 Rust 基础 UI 组件库，目标是提供结构清晰、状态可同步、可组合并支持明暗皮肤的桌面 UI 组件。
 
-当前版本处于早期建设阶段，已经提供基础主题能力、按钮组件 `Button`、单行文本输入组件 `TextInput`、多行文本输入组件 `Textarea`、单选下拉框组件 `Select` 和标准树组件 `Tree`。
+当前版本处于早期建设阶段，已经提供基础主题能力、按钮组件 `Button`、单行文本输入组件 `TextInput`、多行文本输入组件 `Textarea`、单选下拉框组件 `Select`、标准树组件 `Tree` 和标准数据表格组件 `DataTable`。
 
 ## 特性
 
@@ -15,6 +15,7 @@
 - 提供 `Textarea` 多行输入组件，支持换行、软换行、IME、选区、复制、剪切、粘贴、拖拽选中、只读、禁用、最大长度、行数控制、内部滚动条、状态样式和 helper text。
 - 提供 `Select` 单选下拉组件，支持本地搜索、键盘导航、锚定下拉面板、清除、禁用、状态样式、helper text、外部同步和明暗皮肤。
 - 提供 `Tree` 标准树组件，支持展开折叠、单选/多选、级联复选半选、过滤、键盘导航、虚拟列表、禁用、状态样式、helper text 和外部同步。
+- 提供 `DataTable` 标准数据表格组件，支持全局过滤、单列排序、内部分页、每页条数 Select、行选择、自定义展示/操作列、虚拟行渲染、loading/empty、禁用、状态样式、helper text 和外部同步。
 - 通过 `xgpui::prelude::*` 重导出常用组件和配置类型。
 
 ## 安装
@@ -37,7 +38,7 @@ gpui = "0.2.2"
 
 ## 初始化
 
-应用启动时需要调用 `xgpui::install(cx)`。该函数会保证主题状态存在，安装 Lucide 图标字体，并幂等注册 `TextInput`、`Textarea`、`Select` 和 `Tree` 的默认键盘动作。
+应用启动时需要调用 `xgpui::install(cx)`。该函数会保证主题状态存在，安装 Lucide 图标字体，并幂等注册 `TextInput`、`Textarea`、`Select`、`Tree` 和 `DataTable` 的默认键盘动作。
 
 ```rust
 use gpui::Application;
@@ -278,6 +279,57 @@ impl PermissionView {
 
 Tree 的 selected 状态和 checked 状态互相独立。过滤使用 `filter_text`，默认按 label 大小写不敏感匹配并展示祖先路径；第一版不内置搜索输入框，可配合 `TextInput` 使用。
 
+## DataTable
+
+`DataTable<T>` 是标准本地数据表格组件，适合后台列表、资源台账和需要过滤/排序/分页的结构化数据。组件使用稳定 row key 维护选择状态，支持文本数据列、自定义展示列和操作列，底部分页的每页条数使用 `Select`；所有 `set_*` 方法都是受控同步，不触发用户交互回调。
+
+```rust
+use gpui::{div, Context, Entity, IntoElement, ParentElement, SharedString};
+use xgpui::prelude::*;
+
+/// 示例订单行。
+#[derive(Clone)]
+struct Order {
+    id: &'static str,
+    customer: &'static str,
+    status: &'static str,
+}
+
+/// 示例父视图持有 DataTable 实体，便于从外部同步行数据或选中状态。
+struct OrdersView {
+    table: Entity<DataTable<Order>>,
+}
+
+impl OrdersView {
+    /// 创建一个带操作列的本地数据表格。
+    fn new(cx: &mut Context<Self>) -> Self {
+        let table = cx.new(|cx| {
+            DataTable::new(
+                cx,
+                DataTableProps::new(|row: &Order| SharedString::from(row.id))
+                    .rows(vec![
+                        Order { id: "1001", customer: "Acme", status: "Ready" },
+                        Order { id: "1002", customer: "Globex", status: "Blocked" },
+                    ])
+                    .columns(vec![
+                        DataTableColumn::text("customer", "客户", |row: &Order| SharedString::from(row.customer)),
+                        DataTableColumn::text("status", "状态", |row: &Order| SharedString::from(row.status)),
+                        DataTableColumn::actions("actions", "操作", |ctx| {
+                            div().child(if ctx.selected { "已选中" } else { "查看" }).into_any_element()
+                        }),
+                    ])
+                    .selection_mode(DataTableSelectionMode::Multiple)
+                    .page_size(20),
+            )
+        });
+
+        Self { table }
+    }
+}
+```
+
+过滤只匹配可过滤文本列，展示列和操作列默认不参与过滤或排序。第一版只实现本地数据处理；远程过滤、远程排序和远程分页后续单独设计。
+
 ## 示例
 
 运行 `Button` 示例：
@@ -310,6 +362,12 @@ cargo run --example select
 cargo run --example tree
 ```
 
+运行 `DataTable` 示例：
+
+```bash
+cargo run --example data_table
+```
+
 组件示例都包含亮色和暗色皮肤切换，用于验证组件在不同主题下的表现。
 
 ## 文档
@@ -323,6 +381,7 @@ docs/text_input.html
 docs/textarea.html
 docs/select.html
 docs/tree.html
+docs/data_table.html
 ```
 
 `docs/index.html` 保留项目接入、主题、示例入口和实现边界；组件级用法、props、公开方法和键盘行为分别维护在对应组件页面中。
@@ -346,6 +405,7 @@ cargo check --examples
 - `Textarea` 目前实现标准多行文本输入，不包含右下角拖拽 resize、密码/数字类型或前后缀 slot。
 - `Select` 目前只实现单选和本地搜索，不包含多选、远程加载、分组选项或自定义 option 渲染。
 - `Tree` 目前实现标准树能力，不包含拖拽排序、异步加载、远程搜索、右键菜单、节点编辑或自定义节点渲染。
+- `DataTable` 目前实现本地数据表格，不包含远程数据模式、列拖拽、固定列、列显示控制、列级筛选弹层、树形表格或单元格编辑。
 - `Button` 目前实现单按钮能力，不包含按钮组、异步状态管理或任意元素插槽。
 - 项目优先使用稳定 Rust，不引入 nightly 特性。
 - 新增或扩展组件时需要同步支持亮色和暗色皮肤。

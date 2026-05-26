@@ -1,0 +1,247 @@
+<!doctype html>
+<!--
+  DataTable 组件静态文档。
+  本页面维护数据表格的公开 API、数据处理顺序、操作列约束和键盘行为。
+-->
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DataTable 标准数据表格组件 - xgpui 使用文档</title>
+    <meta name="description" content="xgpui DataTable 标准数据表格组件用法、Props、列模型和键盘行为说明。" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <nav class="sidebar" aria-label="文档目录">
+        <strong>xgpui 文档</strong>
+        <a href="index.html">总览</a>
+        <details class="nav-group" open>
+          <summary>组件</summary>
+          <div class="nav-tree">
+            <a href="button.html">Button</a>
+            <a href="text_input.html">TextInput</a>
+            <a href="textarea.html">Textarea</a>
+            <a href="select.html">Select</a>
+            <a href="tree.html">Tree</a>
+            <a class="active" href="data_table.html">DataTable</a>
+            <div class="nav-subtree">
+              <a href="#overview">概览</a>
+              <a href="#basic-usage">基础用法</a>
+              <a href="#columns">列模型</a>
+              <a href="#props">DataTableProps</a>
+              <a href="#methods">公开方法</a>
+              <a href="#keyboard">键盘行为</a>
+            </div>
+          </div>
+        </details>
+      </nav>
+
+      <main class="content">
+        <header class="hero" id="overview">
+          <p class="eyebrow">Component</p>
+          <h1>DataTable 标准数据表格组件</h1>
+          <p>
+            <code>DataTable&lt;T&gt;</code> 提供本地全局过滤、单列排序、内部分页、行选择、
+            自定义展示/操作列、loading/empty、禁用、状态样式、helper text、键盘导航、
+            虚拟行渲染和明暗皮肤。
+          </p>
+          <div class="meta">
+            <span class="pill">Filter</span>
+            <span class="pill">Sort</span>
+            <span class="pill">Pagination Select</span>
+            <span class="pill">Custom Columns</span>
+            <span class="pill">Virtual Rows</span>
+            <span class="pill">Light / Dark</span>
+          </div>
+        </header>
+
+        <section class="section" id="basic-usage">
+          <h2>基础用法</h2>
+          <p>
+            <code>DataTableProps::new(row_key)</code> 必须传入稳定 row key 生成器。过滤、排序、
+            分页和选择都会改变显示位置，选择回调和受控同步都以该 key 为准。
+          </p>
+          <div class="code-block">
+            <pre><code class="language-rust">#[derive(Clone)]
+struct Order {
+    id: &'static str,
+    customer: &'static str,
+    status: &'static str,
+}
+
+let table = cx.new(|cx| {
+    DataTable::new(
+        cx,
+        DataTableProps::new(|row: &Order| SharedString::from(row.id))
+            .rows(orders)
+            .columns(vec![
+                DataTableColumn::text("customer", "客户", |row: &Order| SharedString::from(row.customer)),
+                DataTableColumn::text("status", "状态", |row: &Order| SharedString::from(row.status)),
+                DataTableColumn::actions("actions", "操作", |ctx| {
+                    div().child(if ctx.selected { "已选中" } else { "查看" }).into_any_element()
+                }),
+            ])
+            .selection_mode(DataTableSelectionMode::Multiple)
+            .page_size(20),
+    )
+});</code></pre>
+          </div>
+        </section>
+
+        <section class="section" id="columns">
+          <h2>列模型</h2>
+          <table class="api-table">
+            <thead>
+              <tr>
+                <th>构造器</th>
+                <th>用途</th>
+                <th>过滤 / 排序</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>DataTableColumn::text(key, title, accessor)</code></td>
+                <td>类型化文本数据列，<code>accessor</code> 从行数据读取 <code>SharedString</code>。</td>
+                <td>默认参与全局过滤和表头排序。</td>
+              </tr>
+              <tr>
+                <td><code>DataTableColumn::display(key, title, renderer)</code></td>
+                <td>自定义展示列，renderer 返回 <code>AnyElement</code>。</td>
+                <td>默认不参与过滤或排序。</td>
+              </tr>
+              <tr>
+                <td><code>DataTableColumn::actions(key, title, renderer)</code></td>
+                <td>操作列便捷构造，默认右对齐，适合放在表格最后。</td>
+                <td>不可过滤、不可排序。</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="note">
+            第一版数据处理顺序固定为：<code>rows -> 全局过滤 -> 单列排序 -> 分页 -> 当前页可见行</code>。
+            自定义展示列只负责渲染，不会影响过滤和排序结果。
+          </p>
+        </section>
+
+        <section class="section" id="props">
+          <h2>DataTableProps</h2>
+          <table class="api-table">
+            <thead>
+              <tr>
+                <th>属性</th>
+                <th>类型</th>
+                <th>说明</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>rows</code> / <code>columns</code></td>
+                <td><code>Vec&lt;T&gt;</code> / <code>Vec&lt;DataTableColumn&lt;T&gt;&gt;</code></td>
+                <td>原始行数据和列配置。重复 row key 会保留第一次出现的行。</td>
+              </tr>
+              <tr>
+                <td><code>row_disabled</code></td>
+                <td><code>impl Fn(&T) -> bool</code></td>
+                <td>禁用行仍展示，但不会参与行选择、表头全选或键盘选择。</td>
+              </tr>
+              <tr>
+                <td><code>filter_text</code> / <code>show_filter</code> / <code>filter_placeholder</code></td>
+                <td><code>SharedString</code> / <code>bool</code> / <code>SharedString</code></td>
+                <td>内置全局过滤输入框配置，过滤大小写不敏感。</td>
+              </tr>
+              <tr>
+                <td><code>sort</code></td>
+                <td><code>Option&lt;DataTableSort&gt;</code></td>
+                <td>单列排序状态；不可排序列会被规范化为 <code>None</code>。</td>
+              </tr>
+              <tr>
+                <td><code>page</code> / <code>page_size</code> / <code>page_size_options</code></td>
+                <td><code>usize</code> / <code>usize</code> / <code>Vec&lt;usize&gt;</code></td>
+                <td>内部分页状态，底部每页条数使用 <code>Select</code> 展示，过滤、排序或数据变化后会自动夹到合法页码。</td>
+              </tr>
+              <tr>
+                <td><code>selection_mode</code> / <code>selected_row_keys</code></td>
+                <td><code>DataTableSelectionMode</code> / <code>Vec&lt;SharedString&gt;</code></td>
+                <td><code>None</code>、<code>Single</code> 或 <code>Multiple</code> 行选择。</td>
+              </tr>
+              <tr>
+                <td><code>loading</code> / <code>disabled</code> / <code>required</code></td>
+                <td><code>bool</code></td>
+                <td>加载、禁用和必填语义。禁用或加载时会阻止过滤、排序、分页和选择交互。</td>
+              </tr>
+              <tr>
+                <td><code>size</code> / <code>variant</code> / <code>status</code></td>
+                <td><code>DataTableSize</code> / <code>DataTableVariant</code> / <code>DataTableStatus</code></td>
+                <td>控制行高、容器样式和语义状态色。</td>
+              </tr>
+              <tr>
+                <td><code>helper_text</code> / <code>empty_text</code> / <code>loading_text</code></td>
+                <td><code>Option&lt;SharedString&gt;</code> / <code>SharedString</code></td>
+                <td>辅助文本、空状态文本和加载状态文本。</td>
+              </tr>
+              <tr>
+                <td><code>max_height</code></td>
+                <td><code>Pixels</code></td>
+                <td>当前页虚拟列表最大高度，超过后内部滚动。</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section class="section" id="methods">
+          <h2>公开方法</h2>
+          <table class="api-table">
+            <tbody>
+              <tr>
+                <td><code>rows()</code> / <code>filtered_row_count()</code> / <code>page_state()</code></td>
+                <td>读取原始行、过滤后行数和当前分页派生状态。</td>
+              </tr>
+              <tr>
+                <td><code>sort()</code> / <code>filter_text()</code> / <code>selected_row_keys()</code></td>
+                <td>读取当前排序、过滤文本和 selected row key。</td>
+              </tr>
+              <tr>
+                <td><code>set_rows(...)</code> / <code>set_columns(...)</code></td>
+                <td>从外部同步数据和列配置，不触发交互回调。</td>
+              </tr>
+              <tr>
+                <td><code>set_filter_text(...)</code> / <code>set_sort(...)</code></td>
+                <td>同步过滤和排序状态，不触发 <code>on_filter_change</code> 或 <code>on_sort_change</code>。</td>
+              </tr>
+              <tr>
+                <td><code>set_page(...)</code> / <code>set_page_size(...)</code></td>
+                <td>同步分页状态，并同步底部每页条数 <code>Select</code>，不触发 <code>on_page_change</code>。</td>
+              </tr>
+              <tr>
+                <td><code>set_selected_row_keys(...)</code> / <code>clear_selection(cx)</code></td>
+                <td>同步或按交互语义清空 selected row key。</td>
+              </tr>
+              <tr>
+                <td><code>set_loading(...)</code> / <code>set_disabled(...)</code> / <code>set_status(...)</code> / <code>set_helper_text(...)</code></td>
+                <td>同步展示输入。受控同步不会触发用户交互回调。</td>
+              </tr>
+              <tr>
+                <td><code>clear_filter(cx)</code> / <code>focus_handle()</code></td>
+                <td>清空过滤文本并返回焦点句柄。</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section class="section" id="keyboard">
+          <h2>键盘行为</h2>
+          <ul>
+            <li><code>Up</code> / <code>Down</code> 在当前页移动活动行。</li>
+            <li><code>Home</code> / <code>End</code> 移动到当前页首个或最后一个可选行。</li>
+            <li><code>Enter</code> / <code>Space</code> 执行当前活动行选择。</li>
+            <li><code>Cmd+A</code> / <code>Ctrl+A</code> 在多选模式下切换当前页可选行全选。</li>
+          </ul>
+          <p class="note warning">
+            第一版不包含远程数据模式、列拖拽、固定列、列显示控制、列级筛选弹层、树形表格或单元格编辑。
+          </p>
+        </section>
+      </main>
+    </div>
+    <script src="highlight.js"></script>
+  </body>
+</html>
