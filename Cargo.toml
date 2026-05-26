@@ -9,6 +9,7 @@ license = "Apache-2.0"
 gpui = "0.2.2"
 lucide-icons = "1.14"
 unicode-segmentation = "1"
+chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
 
 [dev-dependencies]
 # 仅在测试目标中启用 gpui 的测试上下文，用于覆盖 Entity 组件公开同步方法。

@@ -2,7 +2,7 @@
 
 `xgpui` 是一个基于 `gpui` 的 Rust 基础 UI 组件库，目标是提供结构清晰、状态可同步、可组合并支持明暗皮肤的桌面 UI 组件。
 
-当前版本处于早期建设阶段，已经提供基础主题能力、按钮组件 `Button`、单行文本输入组件 `TextInput`、多行文本输入组件 `Textarea`、单选下拉框组件 `Select`、标准树组件 `Tree` 和标准数据表格组件 `DataTable`。
+当前版本处于早期建设阶段，已经提供基础主题能力、按钮组件 `Button`、单行文本输入组件 `TextInput`、多行文本输入组件 `Textarea`、单选下拉框组件 `Select`、标准树组件 `Tree`、标准数据表格组件 `DataTable` 和日期时间选择器组件 `DateTimePicker`。
 
 ## 特性
 
@@ -16,6 +16,7 @@
 - 提供 `Select` 单选下拉组件，支持本地搜索、键盘导航、锚定下拉面板、清除、禁用、状态样式、helper text、外部同步和明暗皮肤。
 - 提供 `Tree` 标准树组件，支持展开折叠、单选/多选、级联复选半选、过滤、键盘导航、虚拟列表、禁用、状态样式、helper text 和外部同步。
 - 提供 `DataTable` 标准数据表格组件，支持全局过滤、单列排序、内部分页、每页条数 Select、行选择、自定义展示/操作列、虚拟行渲染、loading/empty、禁用、状态样式、helper text 和外部同步。
+- 提供 `DateTimePicker` 日期时间选择器组件，支持日期、时间、日期时间、对应范围选择、严格手动输入解析、弹层选择、清除、禁用、只读、状态样式、helper text 和外部同步。
 - 通过 `xgpui::prelude::*` 重导出常用组件和配置类型。
 
 ## 安装
@@ -38,7 +39,7 @@ gpui = "0.2.2"
 
 ## 初始化
 
-应用启动时需要调用 `xgpui::install(cx)`。该函数会保证主题状态存在，安装 Lucide 图标字体，并幂等注册 `TextInput`、`Textarea`、`Select`、`Tree` 和 `DataTable` 的默认键盘动作。
+应用启动时需要调用 `xgpui::install(cx)`。该函数会保证主题状态存在，安装 Lucide 图标字体，并幂等注册 `TextInput`、`Textarea`、`Select`、`Tree`、`DataTable` 和 `DateTimePicker` 的默认键盘动作。
 
 ```rust
 use gpui::Application;
@@ -330,6 +331,43 @@ impl OrdersView {
 
 过滤只匹配可过滤文本列，展示列和操作列默认不参与过滤或排序。第一版只实现本地数据处理；远程过滤、远程排序和远程分页后续单独设计。
 
+## DateTimePicker
+
+`DateTimePicker` 是标准日期时间选择器组件，适合预约时间、任务期限、报表时间范围和需要严格格式输入的表单字段。组件使用 `chrono` 的 naive 日期时间类型，不引入时区语义；所有 `set_*` 方法都是受控同步，不触发用户交互回调。
+
+```rust
+use chrono::NaiveDate;
+use gpui::{Context, Entity, SharedString};
+use xgpui::prelude::*;
+
+/// 示例父视图持有 DateTimePicker 实体，便于从外部同步时间范围。
+struct BookingView {
+    schedule: Entity<DateTimePicker>,
+}
+
+impl BookingView {
+    /// 创建一个日期时间范围选择器。
+    fn new(cx: &mut Context<Self>) -> Self {
+        let schedule = cx.new(|cx| {
+            DateTimePicker::new(
+                cx,
+                DateTimePickerProps::default()
+                    .mode(DateTimePickerMode::DateTimeRange)
+                    .value(Some(DateTimePickerValue::DateTimeRange(DateTimeRange::new(
+                        NaiveDate::from_ymd_opt(2026, 5, 26).unwrap().and_hms_opt(9, 0, 0).unwrap(),
+                        NaiveDate::from_ymd_opt(2026, 5, 26).unwrap().and_hms_opt(18, 0, 0).unwrap(),
+                    ))))
+                    .helper_text(Some(SharedString::from("支持手动输入，也可在弹层中选择日期和时间"))),
+            )
+        });
+
+        Self { schedule }
+    }
+}
+```
+
+默认格式为 `Date = %Y-%m-%d`、`Time = %H:%M:%S`、`DateTime = %Y-%m-%d %H:%M:%S`，范围使用 `start ~ end`。手动输入会在 Enter 或失焦时严格解析；无效输入会保留文本、显示错误状态，并且不改变当前值。
+
 ## 示例
 
 运行 `Button` 示例：
@@ -368,6 +406,12 @@ cargo run --example tree
 cargo run --example data_table
 ```
 
+运行 `DateTimePicker` 示例：
+
+```bash
+cargo run --example date_time_picker
+```
+
 组件示例都包含亮色和暗色皮肤切换，用于验证组件在不同主题下的表现。
 
 ## 文档
@@ -382,6 +426,7 @@ docs/textarea.html
 docs/select.html
 docs/tree.html
 docs/data_table.html
+docs/date_time_picker.html
 ```
 
 `docs/index.html` 保留项目接入、主题、示例入口和实现边界；组件级用法、props、公开方法和键盘行为分别维护在对应组件页面中。
@@ -406,6 +451,7 @@ cargo check --examples
 - `Select` 目前只实现单选和本地搜索，不包含多选、远程加载、分组选项或自定义 option 渲染。
 - `Tree` 目前实现标准树能力，不包含拖拽排序、异步加载、远程搜索、右键菜单、节点编辑或自定义节点渲染。
 - `DataTable` 目前实现本地数据表格，不包含远程数据模式、列拖拽、固定列、列显示控制、列级筛选弹层、树形表格或单元格编辑。
+- `DateTimePicker` 目前实现本地 naive 日期时间选择，不包含时区、UTC 转换、夏令时、农历、周选择、季度选择、多日期选择、预设范围列表或自定义面板渲染。
 - `Button` 目前实现单按钮能力，不包含按钮组、异步状态管理或任意元素插槽。
 - 项目优先使用稳定 Rust，不引入 nightly 特性。
 - 新增或扩展组件时需要同步支持亮色和暗色皮肤。

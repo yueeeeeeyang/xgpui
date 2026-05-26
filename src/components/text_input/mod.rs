@@ -118,6 +118,40 @@ pub struct TextInput {
     ///
     /// 每次输入、移动或聚焦都会推进版本号，让旧的异步闪烁任务在下一次唤醒时自动退出。
     cursor_blink_epoch: u64,
+    /// 最近一次非内容编辑交互事件。
+    ///
+    /// 组合型组件会把 TextInput 作为内部输入面板使用。内容变化已经有 `on_change` 和 notify，
+    /// 但“按下 Enter 提交”和“失焦提交”本身不一定改变文本，因此需要一个 crate 内部可读的
+    /// 事件快照，让父级组件通过 `cx.observe` 区分这些提交时机。
+    interaction_event: TextInputInteractionEvent,
+}
+
+/// TextInput 暴露给 crate 内组合组件的交互事件类型。
+///
+/// 该类型不是公开 API，只用于 DateTimePicker 等组合组件在观察内部输入框 notify 时判断
+/// notify 是普通重绘还是一次需要提交/校验的输入事件。
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) struct TextInputInteractionEvent {
+    /// 单调递增的事件编号。观察方记录上次处理过的编号即可避免重复处理同一次事件。
+    pub id: u64,
+    /// 事件种类。
+    pub kind: TextInputInteractionKind,
+}
+
+/// TextInput 内部交互事件种类。
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) enum TextInputInteractionKind {
+    /// 尚未产生需要组合组件关心的交互事件。
+    #[default]
+    None,
+    /// 输入框获得焦点。
+    Focus,
+    /// 输入框失去焦点。
+    Blur,
+    /// 用户按下 Enter。
+    Enter,
+    /// 用户点击输入框内部清除按钮。
+    Clear,
 }
 
 /// 拖选时的自动横向滚动方向。
@@ -165,6 +199,7 @@ impl TextInput {
             is_focused: false,
             cursor_blink_visible: true,
             cursor_blink_epoch: 0,
+            interaction_event: TextInputInteractionEvent::default(),
         }
     }
 
@@ -206,6 +241,64 @@ impl TextInput {
             self.restart_cursor_blink(cx);
         }
         cx.notify();
+    }
+
+    /// 从组合型组件内部同步只读状态。
+    ///
+    /// 只读状态允许聚焦、选择和复制，但不允许编辑内容。该方法不触发外部回调，只用于父组件
+    /// 在自身 `set_readonly` 或 mode 切换时把受控状态同步给内部 TextInput。
+    pub(crate) fn set_readonly(&mut self, readonly: bool, cx: &mut Context<Self>) {
+        if self.readonly == readonly {
+            return;
+        }
+
+        self.readonly = readonly;
+        cx.notify();
+    }
+
+    /// 从组合型组件内部同步语义状态。
+    ///
+    /// 该方法只刷新视觉状态，不改变内容、选区或回调语义。DateTimePicker 会在手动输入解析失败时
+    /// 临时把内部输入框切到错误态，解析成功或外部同步后再恢复父组件传入的状态。
+    pub(crate) fn set_status(&mut self, status: TextInputStatus, cx: &mut Context<Self>) {
+        if self.status == status {
+            return;
+        }
+
+        self.status = status;
+        cx.notify();
+    }
+
+    /// 返回当前语义状态。
+    ///
+    /// 该 getter 只暴露给 crate 内组合组件和测试使用。组合组件在解析失败等场景会通过
+    /// `set_status` 同步内部输入框视觉状态，测试需要读取快照确认状态同步没有遗漏。
+    #[cfg(test)]
+    pub(crate) fn status(&self) -> TextInputStatus {
+        self.status
+    }
+
+    /// 从组合型组件内部同步前后缀插槽。
+    ///
+    /// DateTimePicker 这类组合组件需要把自身的类型图标和清除按钮放入内部 TextInput。
+    /// 插槽本身是渲染闭包，无法可靠比较是否等价，因此调用方负责只在插槽语义变化时调用本方法。
+    pub(crate) fn set_slots(
+        &mut self,
+        prefix: Option<TextInputSlot>,
+        suffix: Option<TextInputSlot>,
+        cx: &mut Context<Self>,
+    ) {
+        self.prefix = prefix;
+        self.suffix = suffix;
+        cx.notify();
+    }
+
+    /// 返回最近一次内部交互事件。
+    ///
+    /// 调用方应记录 `id`，只处理比自己已见编号更新的事件。这里返回值而非可变引用，
+    /// 避免组合组件清空事件时影响其他观察方。
+    pub(crate) fn interaction_event(&self) -> TextInputInteractionEvent {
+        self.interaction_event
     }
 
     /// 清空文本并触发变化回调。
@@ -312,15 +405,27 @@ impl TextInput {
         self.is_focused = focused;
         if focused {
             self.restart_cursor_blink(cx);
+            self.record_interaction_event(TextInputInteractionKind::Focus);
             if let Some(on_focus) = self.on_focus.as_mut() {
                 on_focus();
             }
+            cx.notify();
         } else {
             self.stop_cursor_blink();
+            self.record_interaction_event(TextInputInteractionKind::Blur);
             if let Some(on_blur) = self.on_blur.as_mut() {
                 on_blur();
             }
+            cx.notify();
         }
+    }
+
+    /// 记录一次需要组合组件观察的交互事件。
+    fn record_interaction_event(&mut self, kind: TextInputInteractionKind) {
+        self.interaction_event = TextInputInteractionEvent {
+            id: self.interaction_event.id.wrapping_add(1),
+            kind,
+        };
     }
 
     /// 重置光标闪烁周期。
@@ -748,14 +853,16 @@ impl TextInput {
     }
 
     /// 响应键盘按下事件。
-    fn on_key_down(&mut self, event: &KeyDownEvent, _: &mut Window, _: &mut Context<Self>) {
+    fn on_key_down(&mut self, event: &KeyDownEvent, _: &mut Window, cx: &mut Context<Self>) {
         if let Some(on_key_down) = self.on_key_down.as_mut() {
             on_key_down(event.keystroke.clone());
         }
         if event.keystroke.key == "enter" {
+            self.record_interaction_event(TextInputInteractionKind::Enter);
             if let Some(on_enter) = self.on_enter.as_mut() {
                 on_enter(self.state.content().clone());
             }
+            cx.notify();
         }
     }
 
@@ -767,6 +874,7 @@ impl TextInput {
         cx: &mut Context<Self>,
     ) {
         if self.can_edit() {
+            self.record_interaction_event(TextInputInteractionKind::Clear);
             self.clear(cx);
             window.focus(&self.focus_handle);
         }

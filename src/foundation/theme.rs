@@ -146,6 +146,64 @@ pub struct SelectTheme {
     pub popup_offset: Pixels,
 }
 
+/// `DateTimePicker` 使用的默认主题 token。
+///
+/// 日期时间选择器由输入触发器、锚定弹层、日历网格和时间列组成。尺寸、网格宽度和行高由组件
+/// 自身尺寸枚举决定，主题层只提供明暗皮肤下的颜色、圆角和弹层偏移。
+#[derive(Clone, Copy, Debug)]
+pub struct DateTimePickerTheme {
+    /// 默认触发器背景色。
+    pub background: Hsla,
+    /// filled 变体触发器背景色。
+    pub filled_background: Hsla,
+    /// 默认触发器边框色。
+    pub border: Hsla,
+    /// 正文颜色。
+    pub text: Hsla,
+    /// 弱化文字和图标颜色。
+    pub muted_text: Hsla,
+    /// placeholder 颜色。
+    pub placeholder: Hsla,
+    /// helper text 颜色。
+    pub helper: Hsla,
+    /// 聚焦强调色。
+    pub focus: Hsla,
+    /// 错误状态颜色。
+    pub danger: Hsla,
+    /// 警告状态颜色。
+    pub warning: Hsla,
+    /// 成功状态颜色。
+    pub success: Hsla,
+    /// 禁用态文本颜色。
+    pub disabled_text: Hsla,
+    /// Ghost 变体边框色。
+    pub ghost_border: Hsla,
+    /// 弹层背景色。
+    pub popup_background: Hsla,
+    /// 弹层边框色。
+    pub popup_border: Hsla,
+    /// 日历单元 hover 背景。
+    pub cell_hover: Hsla,
+    /// 当前活动或今天背景。
+    pub cell_active: Hsla,
+    /// 已选择日期/时间背景。
+    pub cell_selected: Hsla,
+    /// 已选择日期/时间文字。
+    pub cell_selected_text: Hsla,
+    /// 范围中间段背景。
+    pub range_background: Hsla,
+    /// 清除按钮 hover 背景。
+    pub clear_button_background: Hsla,
+    /// 圆角。
+    pub radius: Pixels,
+    /// 弹层圆角。
+    pub popup_radius: Pixels,
+    /// 内部元素间距。
+    pub gap: Pixels,
+    /// 弹层相对触发器的垂直偏移。
+    pub popup_offset: Pixels,
+}
+
 /// `Tree` 使用的默认主题 token。
 ///
 /// 该结构覆盖树容器、节点行、复选框、图标和状态色的基础颜色。
@@ -367,6 +425,14 @@ pub fn select_theme(cx: &App) -> SelectTheme {
     }
 }
 
+/// 返回当前应用 `DateTimePicker` 应使用的主题。
+pub fn date_time_picker_theme(cx: &App) -> DateTimePickerTheme {
+    match theme_mode(cx) {
+        ThemeMode::Light => light_date_time_picker_theme(),
+        ThemeMode::Dark => dark_date_time_picker_theme(),
+    }
+}
+
 /// 返回当前应用 `Tree` 应使用的主题。
 pub fn tree_theme(cx: &App) -> TreeTheme {
     match theme_mode(cx) {
@@ -505,6 +571,68 @@ fn dark_select_theme() -> SelectTheme {
         radius: radius::md(),
         popup_radius: radius::md(),
         gap: spacing::sm(),
+        popup_offset: spacing::xs(),
+    }
+}
+
+/// 返回亮色皮肤下的 `DateTimePicker` 主题。
+fn light_date_time_picker_theme() -> DateTimePickerTheme {
+    DateTimePickerTheme {
+        background: color::neutral_0(),
+        filled_background: color::neutral_50(),
+        border: color::neutral_200(),
+        text: color::neutral_900(),
+        muted_text: color::neutral_500(),
+        placeholder: color::neutral_400(),
+        helper: color::neutral_500(),
+        focus: color::primary_500(),
+        danger: color::danger_500(),
+        warning: color::warning_500(),
+        success: color::success_500(),
+        disabled_text: color::neutral_500(),
+        ghost_border: color::neutral_0(),
+        popup_background: color::neutral_0(),
+        popup_border: color::neutral_200(),
+        cell_hover: color::neutral_100(),
+        cell_active: color::primary_50(),
+        cell_selected: color::primary_500(),
+        cell_selected_text: color::neutral_0(),
+        range_background: color::primary_50(),
+        clear_button_background: color::neutral_100(),
+        radius: radius::md(),
+        popup_radius: radius::md(),
+        gap: spacing::xs(),
+        popup_offset: spacing::xs(),
+    }
+}
+
+/// 返回暗色皮肤下的 `DateTimePicker` 主题。
+fn dark_date_time_picker_theme() -> DateTimePickerTheme {
+    DateTimePickerTheme {
+        background: color::dark_background(),
+        filled_background: color::dark_filled_background(),
+        border: color::dark_border(),
+        text: color::dark_text(),
+        muted_text: color::dark_helper(),
+        placeholder: color::dark_placeholder(),
+        helper: color::dark_helper(),
+        focus: color::dark_primary(),
+        danger: color::dark_danger(),
+        warning: color::dark_warning(),
+        success: color::dark_success(),
+        disabled_text: color::dark_disabled_text(),
+        ghost_border: color::dark_muted_border(),
+        popup_background: color::dark_background(),
+        popup_border: color::dark_border(),
+        cell_hover: color::dark_option_hover(),
+        cell_active: color::dark_option_highlighted(),
+        cell_selected: color::dark_primary(),
+        cell_selected_text: color::dark_background(),
+        range_background: color::dark_option_selected(),
+        clear_button_background: color::dark_option_hover(),
+        radius: radius::md(),
+        popup_radius: radius::md(),
+        gap: spacing::xs(),
         popup_offset: spacing::xs(),
     }
 }

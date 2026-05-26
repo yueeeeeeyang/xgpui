@@ -1,0 +1,199 @@
+<!doctype html>
+<!--
+  DateTimePicker 组件静态文档。
+  本页面维护日期时间选择器的模式、值类型、输入解析和键盘行为。
+-->
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DateTimePicker 日期时间选择器 - xgpui 使用文档</title>
+    <meta name="description" content="xgpui DateTimePicker 日期时间选择器用法、Props、模式和值类型说明。" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <nav class="sidebar" aria-label="文档目录">
+        <strong>xgpui 文档</strong>
+        <a href="index.html">总览</a>
+        <details class="nav-group" open>
+          <summary>组件</summary>
+          <div class="nav-tree">
+            <a href="button.html">Button</a>
+            <a href="text_input.html">TextInput</a>
+            <a href="textarea.html">Textarea</a>
+            <a href="select.html">Select</a>
+            <a href="tree.html">Tree</a>
+            <a href="data_table.html">DataTable</a>
+            <a class="active" href="date_time_picker.html">DateTimePicker</a>
+            <div class="nav-subtree">
+              <a href="#overview">概览</a>
+              <a href="#basic-usage">基础用法</a>
+              <a href="#modes">模式和值</a>
+              <a href="#props">DateTimePickerProps</a>
+              <a href="#methods">公开方法</a>
+              <a href="#keyboard">键盘行为</a>
+            </div>
+          </div>
+        </details>
+      </nav>
+
+      <main class="content">
+        <header class="hero" id="overview">
+          <p class="eyebrow">Component</p>
+          <h1>DateTimePicker 日期时间选择器</h1>
+          <p>
+            <code>DateTimePicker</code> 支持日期、时间、日期时间以及对应范围选择。组件使用
+            <code>chrono</code> naive 类型，不处理时区；手动输入使用严格格式解析，弹层提供日历、
+            秒级时间列、清空和确认操作。
+          </p>
+          <div class="meta">
+            <span class="pill">Date / Time / DateTime</span>
+            <span class="pill">Range</span>
+            <span class="pill">Strict Parse</span>
+            <span class="pill">Naive Chrono</span>
+            <span class="pill">Light / Dark</span>
+          </div>
+        </header>
+
+        <section class="section" id="basic-usage">
+          <h2>基础用法</h2>
+          <p>
+            <code>DateTimePickerProps</code> 默认使用 <code>Date</code> 模式。范围模式对外只暴露完整范围；
+            弹层里的半选状态只作为内部草稿存在。
+          </p>
+          <div class="code-block">
+            <pre><code class="language-rust">let picker = cx.new(|cx| {
+    DateTimePicker::new(
+        cx,
+        DateTimePickerProps::default()
+            .mode(DateTimePickerMode::DateTimeRange)
+            .value(Some(DateTimePickerValue::DateTimeRange(DateTimeRange::new(
+                NaiveDateTime::new(start_date, start_time),
+                NaiveDateTime::new(end_date, end_time),
+            ))))
+            .helper_text(Some(SharedString::from("选择业务时间范围"))),
+    )
+});</code></pre>
+          </div>
+        </section>
+
+        <section class="section" id="modes">
+          <h2>模式和值</h2>
+          <table class="api-table">
+            <thead>
+              <tr>
+                <th>模式</th>
+                <th>值类型</th>
+                <th>提交语义</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>Date</code></td>
+                <td><code>DateTimePickerValue::Date(NaiveDate)</code></td>
+                <td>点击日期后立即提交并关闭弹层。</td>
+              </tr>
+              <tr>
+                <td><code>Time</code></td>
+                <td><code>DateTimePickerValue::Time(NaiveTime)</code></td>
+                <td>选择时间草稿，点击确认后提交。</td>
+              </tr>
+              <tr>
+                <td><code>DateTime</code></td>
+                <td><code>DateTimePickerValue::DateTime(NaiveDateTime)</code></td>
+                <td>日期和时间共同形成草稿，点击确认后提交。</td>
+              </tr>
+              <tr>
+                <td><code>DateRange</code> / <code>TimeRange</code> / <code>DateTimeRange</code></td>
+                <td><code>DateTimeRange&lt;T&gt;</code></td>
+                <td>起止值会规范化为 <code>start &lt;= end</code>，点击确认后提交。</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section class="section" id="props">
+          <h2>DateTimePickerProps</h2>
+          <table class="api-table">
+            <tbody>
+              <tr>
+                <td><code>mode</code> / <code>value</code></td>
+                <td>选择模式和初始值。模式不匹配的值会被规范化为空。</td>
+              </tr>
+              <tr>
+                <td><code>min</code> / <code>max</code> / <code>disabled_date</code> / <code>disabled_time</code></td>
+                <td>提交约束和禁用规则，手动输入与弹层选择共用同一套校验。</td>
+              </tr>
+              <tr>
+                <td><code>date_format</code> / <code>time_format</code> / <code>datetime_format</code> / <code>range_separator</code></td>
+                <td>展示和严格手动输入解析使用同一套格式。</td>
+              </tr>
+              <tr>
+                <td><code>minute_step</code> / <code>second_step</code></td>
+                <td>时间列步长，默认均为 <code>1</code>，因此分钟和秒默认提供 <code>0-59</code> 全量选择；非法步长会回退到 <code>1</code>。</td>
+              </tr>
+              <tr>
+                <td><code>disabled</code> / <code>readonly</code> / <code>required</code> / <code>clearable</code></td>
+                <td>禁用、只读、必填和清空语义。只读可聚焦和查看弹层，但不可修改值。</td>
+              </tr>
+              <tr>
+                <td><code>size</code> / <code>variant</code> / <code>status</code> / <code>helper_text</code></td>
+                <td>尺寸、视觉变体、语义状态和辅助文本。</td>
+              </tr>
+              <tr>
+                <td><code>on_change</code> / <code>on_open_change</code> / <code>on_parse_error</code></td>
+                <td>用户交互回调。受控 <code>set_*</code> 同步不会触发这些回调。</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section class="section" id="methods">
+          <h2>公开方法</h2>
+          <table class="api-table">
+            <tbody>
+              <tr>
+                <td><code>value()</code> / <code>mode()</code> / <code>is_open()</code> / <code>input_text()</code></td>
+                <td>读取当前值、模式、打开状态和输入文本。</td>
+              </tr>
+              <tr>
+                <td><code>set_value(...)</code> / <code>set_mode(...)</code></td>
+                <td>从外部同步值和模式，不触发用户变化回调。</td>
+              </tr>
+              <tr>
+                <td><code>set_disabled(...)</code> / <code>set_readonly(...)</code> / <code>set_status(...)</code> / <code>set_helper_text(...)</code></td>
+                <td>同步交互和展示输入。</td>
+              </tr>
+              <tr>
+                <td><code>set_min(...)</code> / <code>set_max(...)</code></td>
+                <td>同步可提交范围约束。</td>
+              </tr>
+              <tr>
+                <td><code>open(cx)</code> / <code>close(cx)</code> / <code>toggle(cx)</code> / <code>clear(cx)</code></td>
+                <td>执行用户语义操作。<code>close</code> 会丢弃未确认草稿。</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section class="section" id="keyboard">
+          <h2>键盘行为</h2>
+          <ul>
+            <li><code>Enter</code> 在输入框中提交手动输入；日期面板打开时选择活动日期，纯时间模式打开时确认草稿。</li>
+            <li><code>Escape</code> 关闭弹层并恢复到当前已提交值。</li>
+            <li><code>Left</code> / <code>Right</code> 移动活动日期到前一天或后一天。</li>
+            <li><code>Up</code> / <code>Down</code> 移动活动日期到上一周或下一周。</li>
+            <li><code>Home</code> / <code>End</code> 移动活动日期到当前面板月份首日或末日。</li>
+            <li><code>PageUp</code> / <code>PageDown</code> 切换上一月或下一月。</li>
+            <li><code>Shift+PageUp</code> / <code>Shift+PageDown</code> 切换上一年或下一年。</li>
+          </ul>
+          <p class="note warning">
+            第一版不包含时区、农历、周选择、季度选择、多日期选择、预设范围列表、远程禁用规则或自定义面板 renderer。
+          </p>
+        </section>
+      </main>
+    </div>
+    <script src="highlight.js"></script>
+  </body>
+</html>

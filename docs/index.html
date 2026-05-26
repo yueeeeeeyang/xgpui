@@ -33,6 +33,7 @@
             <a href="select.html">Select</a>
             <a href="tree.html">Tree</a>
             <a href="data_table.html">DataTable</a>
+            <a href="date_time_picker.html">DateTimePicker</a>
             <a href="#components">组件总览</a>
           </div>
         </details>
@@ -45,12 +46,13 @@
           <h1>xgpui 使用文档</h1>
           <p>
             xgpui 是基于 <code>gpui</code> 的 Rust UI 库，当前已提供 <code>Button</code> 按钮组件、
-            完整的单行 <code>TextInput</code> 组件、多行 <code>Textarea</code> 组件、单选 <code>Select</code> 下拉框组件、标准 <code>Tree</code> 组件和 <code>DataTable</code> 数据表格组件。组件支持内部状态、
+            完整的单行 <code>TextInput</code> 组件、多行 <code>Textarea</code> 组件、单选 <code>Select</code> 下拉框组件、标准 <code>Tree</code> 组件、<code>DataTable</code> 数据表格组件和 <code>DateTimePicker</code> 日期时间选择器。组件支持内部状态、
             外部同步、常见状态样式和明暗皮肤；<code>Button</code> 支持变体、色调、加载和图标，
             <code>TextInput</code> 额外支持密码、数字、IME、选区、
             剪贴板和光标闪烁，<code>Textarea</code> 额外支持换行、软换行、行数控制和内部滚动，
             <code>Select</code> 额外支持本地搜索、锚定下拉面板和键盘导航，<code>Tree</code> 额外支持展开折叠、级联复选、过滤和虚拟列表，
-            <code>DataTable</code> 额外支持过滤、排序、分页、每页条数 Select、行选择和自定义操作列。
+            <code>DataTable</code> 额外支持过滤、排序、分页、每页条数 Select、行选择和自定义操作列，
+            <code>DateTimePicker</code> 额外支持日期、时间、日期时间和对应范围选择。
           </p>
           <div class="meta">
             <span class="pill">Rust 2021</span>
@@ -63,6 +65,7 @@
             <span class="pill">单选 Select</span>
             <span class="pill">标准 Tree</span>
             <span class="pill">数据表格 DataTable</span>
+            <span class="pill">日期时间 DateTimePicker</span>
             <span class="pill">Light / Dark</span>
           </div>
         </header>
@@ -88,7 +91,8 @@ Application::new().run(|cx: &mut App| {
           <p class="note">
             必须调用 <code>xgpui::install(cx)</code>，否则退格、删除、方向键、全选、复制、
             剪切和粘贴等默认动作不会由 <code>TextInput</code> / <code>Textarea</code> 接收，Enter、Space、Escape、
-            方向键、Home 和 End 等默认动作也不会由 <code>Select</code> / <code>Tree</code> 接收。该函数是幂等的，
+            方向键、Home 和 End 等默认动作也不会由 <code>Select</code> / <code>Tree</code> / <code>DataTable</code> /
+            <code>DateTimePicker</code> 接收。该函数是幂等的，
             重复调用不会重复注册默认快捷键。
           </p>
         </section>
@@ -123,7 +127,8 @@ let current = xgpui::theme_mode(cx);</code></pre>
           <p>
             项目内置了 <code>examples/button.rs</code>、<code>examples/text_input.rs</code>、
             <code>examples/textarea.rs</code>、
-            <code>examples/select.rs</code>、<code>examples/tree.rs</code> 和 <code>examples/data_table.rs</code>，
+            <code>examples/select.rs</code>、<code>examples/tree.rs</code>、<code>examples/data_table.rs</code>
+            和 <code>examples/date_time_picker.rs</code>，
             可直接运行查看组件效果。
           </p>
           <div class="code-block">
@@ -132,7 +137,8 @@ cargo run --example text_input
 cargo run --example textarea
 cargo run --example select
 cargo run --example tree
-cargo run --example data_table</code></pre>
+cargo run --example data_table
+cargo run --example date_time_picker</code></pre>
           </div>
           <p>
             <code>button</code> 示例覆盖变体、危险色调、尺寸、禁用、加载、块级按钮、图标和明暗皮肤；
@@ -141,7 +147,8 @@ cargo run --example data_table</code></pre>
             最大长度、行数控制、只读、禁用、错误态和 <code>set_value</code> 外部同步；<code>select</code> 示例覆盖基础选择、
             搜索、禁用、错误态、clearable、空结果、外部同步和明暗皮肤；<code>tree</code> 示例覆盖展开折叠、
             多选、级联复选、过滤、禁用、错误态、外部同步和明暗皮肤；<code>data_table</code> 示例覆盖过滤、
-            排序、分页、多选、禁用行、自定义操作列和明暗皮肤。
+            排序、分页、多选、禁用行、自定义操作列和明暗皮肤；<code>date_time_picker</code> 示例覆盖日期、
+            时间、日期时间、三类范围、禁用规则、错误态、外部同步和明暗皮肤。
           </p>
         </section>
 
@@ -180,6 +187,11 @@ cargo run --example data_table</code></pre>
               <p>标准数据表格组件，覆盖全局过滤、单列排序、内部分页、每页条数 Select、行选择和自定义操作列。</p>
               <p><a href="data_table.html">查看 DataTable 文档</a></p>
             </div>
+            <div class="mini-card">
+              <h3>DateTimePicker</h3>
+              <p>日期时间选择器组件，覆盖日期、时间、日期时间、范围选择、严格手动输入解析和弹层选择。</p>
+              <p><a href="date_time_picker.html">查看 DateTimePicker 文档</a></p>
+            </div>
           </div>
         </section>
 
@@ -193,13 +205,14 @@ cargo run --example data_table</code></pre>
             <li>当前版本只实现单选 <code>Select</code>，不包含多选、远程加载、分组或自定义 option 渲染。</li>
             <li><code>Tree</code> 第一版支持标准树能力，不包含拖拽排序、异步加载、远程搜索、右键菜单、节点编辑或自定义节点渲染。</li>
             <li><code>DataTable</code> 第一版支持本地数据表格，不包含远程数据、列拖拽、固定列、列级筛选、树形表格或单元格编辑。</li>
+            <li><code>DateTimePicker</code> 第一版使用本地 naive 日期时间，不包含时区、UTC 转换、夏令时、农历、周选择、季度选择、多日期选择、预设范围列表或自定义面板渲染。</li>
             <li>项目优先使用稳定 Rust，不引入 nightly 特性。</li>
             <li>新功能应按模块、类型和职责拆分，避免把组件逻辑堆在单个文件或单个方法中。</li>
             <li>公共 API、组件行为、状态流转和边界条件应通过中文注释说明设计意图。</li>
             <li>所有新增或扩展组件都需要同步实现明暗皮肤，并通过 <code>foundation::theme</code> 解析颜色 token。</li>
           </ul>
           <p class="note warning">
-            如果需要新增按钮组、按钮任意元素插槽、表单校验、Textarea resize、多选 Select、Tree 拖拽、远程搜索或 DataTable 远程数据模式，
+            如果需要新增按钮组、按钮任意元素插槽、表单校验、Textarea resize、多选 Select、Tree 拖拽、远程搜索、DataTable 远程数据模式或 DateTimePicker 预设范围，
             请先补充交互需求和 API 预期，
             再扩展组件层次和状态模型。
           </p>
